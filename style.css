@@ -1,0 +1,40 @@
+/* spacing */
+
+
+/* typography */
+
+html {
+    font-family: courier,arial,helvética;
+  }
+  
+  thead th, tfoot th {
+    font-family: courier,arial,helvética;
+  }
+  
+  th {
+    letter-spacing: 1px;
+  }
+  
+  td {
+    letter-spacing: 1px;
+  }
+  
+  tbody td {
+    text-align: center;
+  }
+  
+  tfoot th {
+    text-align: right;
+  }
+tbody tr:nth-child(odd) {
+    background-color: #ffff;
+  }
+  
+  tbody tr:nth-child(even) {
+    background-color: #fdfd96;
+  }
+
+  
+  table {
+    background-color: #fbfd8a;
+  }

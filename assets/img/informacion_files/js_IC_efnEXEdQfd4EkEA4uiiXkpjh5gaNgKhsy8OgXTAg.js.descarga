@@ -1,0 +1,3377 @@
+/**
+ * @file
+ * Marker InfoWindow.
+ */
+
+/**
+ * @typedef {Object} MarkerInfoWindowSettings
+ *
+ * @extends {GeolocationMapFeatureSettings}
+ *
+ * @property {Boolean} infoAutoDisplay
+ * @property {Boolean} disableAutoPan
+ * @property {Boolean} infoWindowSolitary
+ * @property {int} maxWidth
+ */
+
+/**
+ * @typedef {Object} GoogleInfoWindow
+ * @property {Function} open
+ * @property {Function} close
+ */
+
+/**
+ * @property {GoogleInfoWindow} GeolocationGoogleMap.infoWindow
+ * @property {function({}):GoogleInfoWindow} GeolocationGoogleMap.InfoWindow
+ */
+
+(function (Drupal) {
+  "use strict";
+
+  /**
+   * Marker InfoWindow.
+   *
+   * @type {Drupal~behavior}
+   *
+   * @prop {Drupal~behaviorAttach} attach
+   *   Attaches common map style functionality to relevant elements.
+   */
+  Drupal.behaviors.geolocationMarkerInfoWindow = {
+    attach: function (context, drupalSettings) {
+      Drupal.geolocation.executeFeatureOnAllMaps(
+        "marker_infowindow",
+
+        /**
+         * @param {GeolocationGoogleMap} map - Current map.
+         * @param {MarkerInfoWindowSettings} featureSettings - Settings for current feature.
+         */
+        function (map, featureSettings) {
+          map.addMarkerAddedCallback(function (currentMarker) {
+            if (typeof currentMarker.locationWrapper === "undefined") {
+              return;
+            }
+
+            var content =
+              currentMarker.locationWrapper.find(".location-content");
+
+            if (content.length < 1) {
+              return;
+            }
+            content = content.html();
+
+            var markerInfoWindow = {
+              content: content.toString(),
+              disableAutoPan: featureSettings.disableAutoPan,
+            };
+
+            if (featureSettings.maxWidth > 0) {
+              markerInfoWindow.maxWidth = featureSettings.maxWidth;
+            }
+
+            // Set the info popup text.
+            var currentInfoWindow = new google.maps.InfoWindow(
+              markerInfoWindow
+            );
+
+            currentMarker.addListener("click", function () {
+              if (featureSettings.infoWindowSolitary) {
+                if (typeof map.infoWindow !== "undefined") {
+                  map.infoWindow.close();
+                }
+                map.infoWindow = currentInfoWindow;
+              }
+              currentInfoWindow.open(map.googleMap, currentMarker);
+            });
+
+            if (featureSettings.infoAutoDisplay) {
+              if (map.googleMap.get("tilesloading")) {
+                google.maps.event.addListenerOnce(
+                  map.googleMap,
+                  "tilesloaded",
+                  function () {
+                    google.maps.event.trigger(currentMarker, "click");
+                  }
+                );
+              } else {
+                jQuery.each(map.mapMarkers, function (index, currentMarker) {
+                  google.maps.event.trigger(currentMarker, "click");
+                });
+              }
+            }
+          });
+
+          return true;
+        },
+        drupalSettings
+      );
+    },
+    detach: function (context, drupalSettings) {},
+  };
+})(Drupal);
+;
+/**
+ * @file
+ * Control locate.
+ */
+
+(function ($, Drupal) {
+  "use strict";
+
+  /**
+   * Locate control.
+   *
+   * @type {Drupal~behavior}
+   *
+   * @prop {Drupal~behaviorAttach} attach
+   *   Attaches common map style functionality to relevant elements.
+   */
+  Drupal.behaviors.geolocationControlLocate = {
+    attach: function (context, drupalSettings) {
+      Drupal.geolocation.executeFeatureOnAllMaps(
+        "control_locate",
+
+        /**
+         * @param {GeolocationMapInterface} map
+         * @param {GeolocationMapFeatureSettings} featureSettings
+         */
+        function (map, featureSettings) {
+          map.addInitializedCallback(function (map) {
+            var locateButton = $(
+              ".geolocation-map-control .locate",
+              map.wrapper
+            );
+
+            if (
+              navigator.geolocation &&
+              window.location.protocol === "https:"
+            ) {
+              locateButton.click(function (e) {
+                navigator.geolocation.getCurrentPosition(function (
+                  currentPosition
+                ) {
+                  var currentLocation = new google.maps.LatLng(
+                    currentPosition.coords.latitude,
+                    currentPosition.coords.longitude
+                  );
+                  map.setCenterByCoordinates(
+                    currentLocation,
+                    currentPosition.coords.accuracy,
+                    "google_control_locate"
+                  );
+                });
+                e.preventDefault();
+              });
+            } else {
+              locateButton.remove();
+            }
+          });
+
+          return true;
+        },
+        drupalSettings
+      );
+    },
+    detach: function (context, drupalSettings) {},
+  };
+})(jQuery, Drupal);
+;
+/**
+ * @file
+ * Zoom Control.
+ */
+
+/**
+ * @typedef {Object} ControlZoomSettings
+ *
+ * @extends {GeolocationMapFeatureSettings}
+ *
+ * @property {String} behavior
+ * @property {String} position
+ * @property {String} style
+ */
+
+(function (Drupal) {
+  "use strict";
+
+  /**
+   * Zoom control.
+   *
+   * @type {Drupal~behavior}
+   *
+   * @prop {Drupal~behaviorAttach} attach
+   *   Attaches common map style functionality to relevant elements.
+   */
+  Drupal.behaviors.geolocationZoomControl = {
+    attach: function (context, drupalSettings) {
+      Drupal.geolocation.executeFeatureOnAllMaps(
+        "control_zoom",
+
+        /**
+         * @param {GeolocationGoogleMap} map - Current map.
+         * @param {ControlZoomSettings} featureSettings - Settings for current feature.
+         */
+        function (map, featureSettings) {
+          map.addPopulatedCallback(function (map) {
+            var options = {
+              zoomControlOptions: {
+                position: google.maps.ControlPosition[featureSettings.position],
+                style: google.maps.ZoomControlStyle[featureSettings.style],
+              },
+            };
+
+            if (featureSettings.behavior === "always") {
+              options.zoomControl = true;
+            } else {
+              options.zoomControl = undefined;
+            }
+            map.googleMap.setOptions(options);
+          });
+
+          return true;
+        },
+        drupalSettings
+      );
+    },
+    detach: function (context, drupalSettings) {},
+  };
+})(Drupal);
+;
+/**
+ * @file
+ * Control MapType.
+ */
+
+/**
+ * @typedef {Object} ControlMapTypeSettings
+ *
+ * @extends {GeolocationMapFeatureSettings}
+ *
+ * @property {String} position
+ * @property {String} style
+ * @property {String} behavior
+ */
+
+(function (Drupal) {
+  "use strict";
+
+  /**
+   * Maptype control.
+   *
+   * @type {Drupal~behavior}
+   *
+   * @prop {Drupal~behaviorAttach} attach
+   *   Attaches common map style functionality to relevant elements.
+   */
+  Drupal.behaviors.geolocationMapTypeControl = {
+    attach: function (context, drupalSettings) {
+      Drupal.geolocation.executeFeatureOnAllMaps(
+        "control_maptype",
+
+        /**
+         * @param {GeolocationGoogleMap} map - Current map.
+         * @param {ControlMapTypeSettings} featureSettings - Settings for current feature.
+         */
+        function (map, featureSettings) {
+          map.addPopulatedCallback(function (map) {
+            var options = {
+              mapTypeControlOptions: {
+                position: google.maps.ControlPosition[featureSettings.position],
+                style: google.maps.MapTypeControlStyle[featureSettings.style],
+              },
+            };
+
+            if (featureSettings.behavior === "always") {
+              options.mapTypeControl = true;
+            } else {
+              options.mapTypeControl = undefined;
+            }
+
+            map.googleMap.setOptions(options);
+          });
+
+          return true;
+        },
+        drupalSettings
+      );
+    },
+    detach: function (context, drupalSettings) {},
+  };
+})(Drupal);
+;
+/**
+ * @file
+ * Defines Javascript behaviors for MegaMenu frontend.
+ */
+
+(function ($, Drupal, drupalSettings) {
+  "use strict";
+
+  Drupal.TBMegaMenu = Drupal.TBMegaMenu || {};
+
+  Drupal.TBMegaMenu.oldWindowWidth = 0;
+  Drupal.TBMegaMenu.displayedMenuMobile = false;
+  Drupal.TBMegaMenu.supportedScreens = [980];
+  Drupal.TBMegaMenu.focusableElements = 'a:not([disabled]), button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), details:not([disabled]), [tabindex]:not([disabled]):not([tabindex="-1"])';
+  Drupal.TBMegaMenu.menuResponsive = function () {
+    var windowWidth = window.innerWidth ? window.innerWidth : $(window).width();
+    var navCollapse = $('.tb-megamenu').children('.nav-collapse');
+    if (windowWidth < Drupal.TBMegaMenu.supportedScreens[0]) {
+      navCollapse.addClass('collapse');
+      if (Drupal.TBMegaMenu.displayedMenuMobile) {
+        navCollapse.css({height: 'auto', overflow: 'visible'});
+      }
+      else {
+        navCollapse.css({height: 0, overflow: 'hidden'});
+      }
+    }
+    else {
+      // If width of window is greater than 980 (supported screen).
+      navCollapse.removeClass('collapse');
+      if (navCollapse.height() <= 0) {
+        navCollapse.css({height: 'auto', overflow: 'visible'});
+      }
+    }
+  };
+
+  Drupal.TBMegaMenu.focusNextPrevElement = function (direction) {
+    // Add all the elements we want to include in our selection
+    var $current = $(document.activeElement);
+
+    if ($current.length) {
+      var $focusable = $(Drupal.TBMegaMenu.focusableElements).filter(function () {
+        var $this = $(this);
+        return $this.closest('.tb-megamenu-subnav').length === 0 && $this.is(':visible');
+      })
+
+      var index = $focusable.index($current);
+      if (index > -1) {
+        if (direction === 'next') {
+          var nextElement = $focusable[index + 1] || $focusable[0];
+        }
+        else {
+          var nextElement = $focusable[index - 1] || $focusable[0];
+        }
+
+        nextElement.focus();
+      }
+    }
+  }
+
+
+  Drupal.behaviors.tbMegaMenuAction = {
+    attach: function (context, settings) {
+
+      $('.tb-megamenu', context).once('tb-megamenu').each(function () {
+
+        /* Keyboard Control Setup */
+        // Semi-Global Variables
+        var navParent = document.querySelector('.tb-megamenu'),
+            linkArray = new Array(),
+            curPos = new Array(-1,-1,-1);
+
+        // Each Top-Level Link
+        $(this).find('.level-1').children('a, span').not('.mobile-only').each(function (i, toplink) {
+          linkArray[i] = new Array();
+
+          // Add Link to Array
+          linkArray[i][-1] = toplink;
+
+          // Determine Coordinates
+          $(toplink).data({ coordinate: [i, -1] });
+
+          // Each Column
+          $(toplink).next().children().children().children('.mega-col-nav').each(function (j, column) {
+            // Only add to the linkArray if menu items exist.
+            // TODO - this does not allow for tabbing to links in blocks, only menu item links.
+            if ($(column).find(Drupal.TBMegaMenu.focusableElements).length > 0) {
+
+              linkArray[i][j] = new Array();
+
+              // Each Link
+              $(column).find(Drupal.TBMegaMenu.focusableElements).each(function (k, sublink) {
+
+                // Add Link to Array
+                linkArray[i][j][k] = sublink;
+
+                // Determine Coordinates
+                $(sublink).data({ coordinate: [i, j, k] });
+              }); // each link
+            }
+
+          }); // each column
+
+        }); // each top-level link
+
+        // Update Position on Focus
+        $(this).find(Drupal.TBMegaMenu.focusableElements).focus(function () {
+          curPos = $(this).data('coordinate');
+        });
+
+        // Key Pressed
+        function keydownEvent(k) {
+          // Determine Key
+          switch(k.keyCode) {
+
+            // TAB
+            case 9:
+              k.preventDefault();
+              nav_tab(k);
+              break;
+
+            // RETURN
+            case 13:
+              nav_open_link();
+              break;
+
+            // ESC
+            case 27:
+              nav_esc();
+              break;
+
+            // LEFT
+            case 37:
+              k.preventDefault();
+              nav_left();
+              break;
+
+            // UP
+            case 38:
+              k.preventDefault();
+              nav_up();
+              break;
+
+            // RIGHT
+            case 39:
+              k.preventDefault();
+              nav_right();
+              break;
+
+            // DOWN
+            case 40:
+              k.preventDefault();
+              nav_down();
+              break;
+
+            // HOME
+            case 36:
+              nav_home();
+              break;
+
+            // END
+            case 35:
+              nav_end();
+              break;
+
+            // Else
+            default:
+              // Do nothing
+
+          } // determine key
+        } // keydownEvent
+
+        /* Keypress Functions */
+        // Tab
+        function nav_tab(k) {
+          if (nav_is_toplink()) {
+            if (k.shiftKey) {
+              nav_prev_toplink();
+            }
+            else {
+              nav_next_toplink();
+            }
+          }
+          else {
+            if (k.shiftKey) {
+              nav_up();
+            }
+            else {
+              nav_down();
+            }
+          }
+        }
+
+        // Open Link
+        function nav_open_link() {
+          linkArray[curPos[0]][curPos[1]][curPos[2]].click();
+        }
+
+        // Escape
+        function nav_esc() {
+          nav_close_megamenu();
+        }
+
+        // Left
+        function nav_left() {
+          if (nav_is_toplink()) {
+            nav_prev_toplink();
+          }
+          else {
+            nav_prev_column();
+          }
+        }
+
+        // Right
+        function nav_right() {
+          if (nav_is_toplink()) {
+            nav_next_toplink();
+          }
+          else {
+            nav_next_column();
+          }
+        }
+
+        // Up
+        function nav_up() {
+          if (nav_is_toplink()) {
+            nav_prev_toplink();
+          }
+          else {
+            if (linkArray[curPos[0]][curPos[1]][curPos[2] - 1]) {
+              // If the previous link in the array is hidden (ie, it's in a
+              // submenu that is not currently expanded), then skip to the next
+              // item in the array until we find one that's visible.
+              if ($(linkArray[curPos[0]][curPos[1]][curPos[2] - 1]).is(':visible')) {
+                linkArray[curPos[0]][curPos[1]][curPos[2] - 1].focus();
+              }
+              else {
+                curPos = [curPos[0], curPos[1], curPos[2] - 1];
+                nav_up();
+              }
+            }
+            else {
+              nav_prev_column();
+            }
+          }
+        }
+
+        // Down
+        function nav_down() {
+          if (nav_is_toplink()) {
+            nav_next_column();
+          }
+          else {
+            if (linkArray[curPos[0]][curPos[1]][curPos[2] + 1]) {
+              linkArray[curPos[0]][curPos[1]][curPos[2] + 1].focus();
+            }
+            else {
+              nav_next_column();
+            }
+          }
+        }
+
+        // Home Button
+        function nav_home() {
+          if (nav_is_toplink()) {
+            linkArray[0][-1].focus();
+          }
+          else {
+            linkArray[curPos[0]][0][0].focus();
+          }
+        }
+
+        // End Button
+        function nav_end() {
+          if (nav_is_toplink()) {
+            linkArray.slice(-1)[0][-1].focus();
+          }
+          else {
+            linkArray[curPos[0]].slice(-1)[0].slice(-1)[0].focus();
+          }
+        }
+
+        /* Helper Functions */
+        // Determine Link Level
+        function nav_is_toplink() {
+          return (curPos[1] < 0);
+        }
+
+        // Close Mega Menu
+        function nav_close_megamenu() {
+          $('.tb-megamenu .open').removeClass('open');
+          ariaCheck();
+        }
+
+        // Next Toplink
+        function nav_next_toplink() {
+          if (linkArray[curPos[0] + 1]) {
+            linkArray[curPos[0] + 1][-1].focus();
+          }
+          else {
+            nav_close_megamenu();
+
+            // Focus on the next element.
+            Drupal.TBMegaMenu.focusNextPrevElement('next');
+          }
+        }
+
+        // Previous Toplink
+        function nav_prev_toplink() {
+          if (linkArray[curPos[0] - 1]) {
+            linkArray[curPos[0] - 1][-1].focus();
+          }
+          else {
+            // Focus on the previous element.
+            Drupal.TBMegaMenu.focusNextPrevElement('prev');
+          }
+        }
+
+        // Previous Column
+        function nav_prev_column() {
+          if (linkArray[curPos[0]][curPos[1] - 1][0]) {
+            linkArray[curPos[0]][curPos[1] - 1][0].focus();
+          }
+          else {
+            nav_parent_toplink();
+          }
+        }
+
+        // Next Column
+        function nav_next_column() {
+          if (linkArray[curPos[0]][curPos[1] + 1]) {
+            linkArray[curPos[0]][curPos[1] + 1][0].focus();
+          }
+          else {
+            nav_parent_toplink();
+          }
+        }
+
+        // Go to Parent Toplink
+        function nav_parent_toplink() {
+          linkArray[curPos[0]][-1].focus();
+        }
+
+        var ariaCheck = function () {
+          $("li.tb-megamenu-item", this).each(function () {
+            if ($(this).is('.mega-group')) {
+              // Mega menu item has mega class (it's a true mega menu)
+              if (!$(this).parents().is('.open')) {
+                // Mega menu item has mega class and its ancestor is closed, so apply appropriate ARIA attributes
+                $(this).children().attr('aria-expanded', 'false');
+              }
+              else if ($(this).parents().is('.open')) {
+                // Mega menu item has mega class and its ancestor is open, so apply appropriate ARIA attributes
+                $(this).children().attr('aria-expanded', 'true');
+              }
+            }
+            else if ($(this).is('.dropdown') || $(this).is('.dropdown-submenu')) {
+              // Mega menu item has dropdown (it's a flyout menu)
+              if (!$(this).is('.open')) {
+                // Mega menu item has dropdown class and is closed, so apply appropriate ARIA attributes
+                $(this).children().attr('aria-expanded', 'false');
+              }
+              else if ($(this).is('.open')) {
+                // Mega menu item has dropdown class and is open, so apply appropriate ARIA attributes
+                $(this).children().attr('aria-expanded', 'true');
+              }
+            }
+            else {
+              // Mega menu item is neither a mega or dropdown class, so remove ARIA attributes (it doesn't have children)
+              $(this).children().removeAttr('aria-expanded');
+            }
+          });
+        };
+
+        var showMenu = function ($subMenu, mm_timeout) {
+          if ($subMenu.hasClass('mega')) {
+            $subMenu.addClass('animating');
+            clearTimeout($subMenu.data('animatingTimeout'));
+            $subMenu.data('animatingTimeout', setTimeout(function () {
+              $subMenu.removeClass('animating')
+            }, mm_timeout));
+            clearTimeout($subMenu.data('hoverTimeout'));
+            $subMenu.data('hoverTimeout', setTimeout(function () {
+              $subMenu.addClass('open');
+              ariaCheck();
+            }, 100));
+          }
+          else {
+            clearTimeout($subMenu.data('hoverTimeout'));
+            $subMenu.data('hoverTimeout',
+                setTimeout(function () {
+                  $subMenu.addClass('open');
+                  ariaCheck();
+                }, 100));
+          }
+        };
+
+        var hideMenu = function ($subMenu, mm_timeout) {
+          $subMenu.children('.dropdown-toggle').attr('aria-expanded', 'false');
+          if ($subMenu.hasClass('mega')) {
+            $subMenu.addClass('animating');
+            clearTimeout($subMenu.data('animatingTimeout'));
+            $subMenu.data('animatingTimeout', setTimeout(function () {
+              $subMenu.removeClass('animating')
+            }, mm_timeout));
+            clearTimeout($subMenu.data('hoverTimeout'));
+            $subMenu.data('hoverTimeout', setTimeout(function () {
+              $subMenu.removeClass('open');
+              ariaCheck();
+            }, 100));
+          }
+          else {
+            clearTimeout($subMenu.data('hoverTimeout'));
+            $subMenu.data('hoverTimeout', setTimeout(function () {
+              $subMenu.removeClass('open');
+              ariaCheck();
+            }, 100));
+          }
+        };
+
+        $('.tb-megamenu-button', this).click(function () {
+          if (parseInt($(this).parent().children('.nav-collapse').height())) {
+            $(this).parent().children('.nav-collapse').css({height: 0, overflow: 'hidden'});
+            Drupal.TBMegaMenu.displayedMenuMobile = false;
+          }
+          else {
+            $(this).parent().children('.nav-collapse').css({height: 'auto', overflow: 'visible'});
+            Drupal.TBMegaMenu.displayedMenuMobile = true;
+          }
+        });
+
+        var isTouch = window.matchMedia('(pointer: coarse)').matches;
+
+        if (!isTouch) {
+          var mm_duration = 0;
+
+          $('.tb-megamenu', context).each(function () {
+            if ($(this).data('duration')) {
+              mm_duration = $(this).data('duration');
+            }
+          });
+
+          var mm_timeout = mm_duration ? 100 + mm_duration : 500;
+          $('.nav > li, li.mega', context).bind('mouseenter', function (event) {
+            showMenu($(this), mm_timeout);
+          });
+
+          $('.nav > li > .dropdown-toggle, li.mega > .dropdown-toggle', context).bind('focus', function (event) {
+            var $this = $(this);
+            var $subMenu = $this.closest('li');
+            showMenu($subMenu, mm_timeout);
+            // If the focus moves outside of the subMenu, close it.
+            $(document).bind('focusin', function (event) {
+              if ($subMenu.has(event.target).length) {
+                return;
+              }
+              $(document).unbind(event);
+              hideMenu($subMenu, mm_timeout);
+            });
+          });
+
+          $('.nav > li, li.mega', context).bind('mouseleave', function (event) {
+            hideMenu($(this), mm_timeout);
+          });
+
+          /**
+           * Allow tabbing by appending the open class.
+           * Works in tandem with CSS changes that utilize opacity rather than
+           * display none
+           */
+          // If the selected anchor is not in the TB Megamenu, remove all "open"
+          // class occurrences
+          $('a, span').focus(function (event) {
+            if (!$(this).parent().hasClass('tb-megamenu-item') && !$(this).parents('.tb-megamenu-block').length) {
+              nav_close_megamenu();
+            }
+          });
+
+          $('.nav > li > a, li.mega > a').focus(function (event) {
+            // Remove all occurrences of "open" from other menu trees
+            var siblings = $(this).parents('.tb-megamenu-item').siblings();
+            // var siblings = $(this).closest('.tb-megamenu-item.level-1').siblings();
+            $.each(siblings, function (i, v) {
+              var cousins = $(v).find('.open');
+              $.each(cousins, function (index, value) {
+                $(value).removeClass('open');
+                ariaCheck($(this));
+              });
+              $(v).removeClass('open');
+              ariaCheck();
+            });
+            // Open the submenu if the selected item has one
+            if ($(this).next(".tb-megamenu-submenu").length > 0) {
+              if (!$(this).parent().hasClass("open")) {
+                $(this).parent().addClass("open");
+              }
+            }
+            // If the anchor's top-level parent is not open, open it
+            if (!$(this).closest('.tb-megamenu-item.dropdown').hasClass('open') && $(this).closest('.tb-megamenu-item.dropdown').find('.tb-megamenu-submenu').length > 0) {
+              $(this).closest('.tb-megamenu-item.dropdown').addClass('open');
+              ariaCheck();
+            }
+            // If anchor's parent submenus are not open, open them
+            var parents = $(this).parents('.tb-megamenu-item.dropdown-submenu');
+            $.each(parents, function (i, v) {
+              if (!$(v).hasClass('open')) {
+                $(v).addClass('open');
+                ariaCheck();
+              }
+            });
+          });
+        }
+
+        // Define actions for touch devices.
+        var createTouchMenu = function (items) {
+          items.children("a, span").each(function () {
+            var $item = $(this);
+            var tbitem = $(this).parent();
+
+            $item.click(function (event) {
+              // If the menu link has already been clicked once...
+              if ($item.hasClass("tb-megamenu-clicked")) {
+                var $uri = $item.attr("href");
+
+                // If the menu link has a URI, go to the link.
+                // <nolink> menu items will not have a URI.
+                if ($uri) {
+                  window.location.href = $uri;
+                }
+                else {
+                  $item.removeClass("tb-megamenu-clicked");
+                  hideMenu(tbitem, mm_timeout);
+                }
+              }
+              else {
+                event.preventDefault();
+
+                // Hide any already open menus.
+                nav_close_megamenu();
+                $(".tb-megamenu").find(".tb-megamenu-clicked").removeClass("tb-megamenu-clicked");
+
+                // Open the submenu.
+                $item.addClass("tb-megamenu-clicked");
+                showMenu(tbitem, mm_timeout);
+              }
+            });
+          });
+
+          // Anytime there's a click outside the menu, close the menu.
+          $(document).on('click', function (event) {
+            if ($(event.target).closest('.tb-megamenu-nav').length === 0) {
+              nav_close_megamenu();
+              $(".tb-megamenu").find(".tb-megamenu-clicked").removeClass("tb-megamenu-clicked");
+            };
+          })
+        };
+
+        if (isTouch) {
+          createTouchMenu($(".tb-megamenu ul.nav li.mega", context).has(".dropdown-menu"));
+        };
+
+        $(window).on('load resize', function () {
+          var windowWidth = window.innerWidth ? window.innerWidth : $(window).width();
+          if (windowWidth != Drupal.TBMegaMenu.oldWindowWidth) {
+            Drupal.TBMegaMenu.oldWindowWidth = windowWidth;
+            Drupal.TBMegaMenu.menuResponsive();
+
+            if (windowWidth >= Drupal.TBMegaMenu.supportedScreens[0]) {
+              navParent.addEventListener('keydown',keydownEvent);
+            }
+            else {
+              navParent.removeEventListener('keydown',keydownEvent);
+            }
+          }
+        });
+
+      });
+
+    }
+  }
+})(jQuery, Drupal, drupalSettings);
+;
+/**
+* DO NOT EDIT THIS FILE.
+* See the following change record for more information,
+* https://www.drupal.org/node/2815083
+* @preserve
+**/
+
+(function ($, Drupal, _ref) {
+  var isTabbable = _ref.isTabbable;
+  $.extend($.expr[':'], {
+    tabbable: function tabbable(element) {
+      Drupal.deprecationError({
+        message: 'The :tabbable selector is deprecated in Drupal 9.2.0 and will be removed in Drupal 10.0.0. Use the core/tabbable library instead. See https://www.drupal.org/node/3183730'
+      });
+
+      if (element.tagName === 'SUMMARY' || element.tagName === 'DETAILS') {
+        var tabIndex = element.getAttribute('tabIndex');
+
+        if (tabIndex === null || tabIndex < 0) {
+          return false;
+        }
+      }
+
+      return isTabbable(element);
+    }
+  });
+})(jQuery, Drupal, window.tabbable);;
+/**
+* DO NOT EDIT THIS FILE.
+* See the following change record for more information,
+* https://www.drupal.org/node/2815083
+* @preserve
+**/
+
+(function ($) {
+  var cachedScrollbarWidth = null;
+  var max = Math.max,
+      abs = Math.abs;
+  var regexHorizontal = /left|center|right/;
+  var regexVertical = /top|center|bottom/;
+  var regexOffset = /[+-]\d+(\.[\d]+)?%?/;
+  var regexPosition = /^\w+/;
+  var regexPercent = /%$/;
+  var _position = $.fn.position;
+
+  function getOffsets(offsets, width, height) {
+    return [parseFloat(offsets[0]) * (regexPercent.test(offsets[0]) ? width / 100 : 1), parseFloat(offsets[1]) * (regexPercent.test(offsets[1]) ? height / 100 : 1)];
+  }
+
+  function parseCss(element, property) {
+    return parseInt($.css(element, property), 10) || 0;
+  }
+
+  function getDimensions(elem) {
+    var raw = elem[0];
+
+    if (raw.nodeType === 9) {
+      return {
+        width: elem.width(),
+        height: elem.height(),
+        offset: {
+          top: 0,
+          left: 0
+        }
+      };
+    }
+
+    if ($.isWindow(raw)) {
+      return {
+        width: elem.width(),
+        height: elem.height(),
+        offset: {
+          top: elem.scrollTop(),
+          left: elem.scrollLeft()
+        }
+      };
+    }
+
+    if (raw.preventDefault) {
+      return {
+        width: 0,
+        height: 0,
+        offset: {
+          top: raw.pageY,
+          left: raw.pageX
+        }
+      };
+    }
+
+    return {
+      width: elem.outerWidth(),
+      height: elem.outerHeight(),
+      offset: elem.offset()
+    };
+  }
+
+  var collisions = {
+    fit: {
+      left: function left(position, data) {
+        var within = data.within;
+        var withinOffset = within.isWindow ? within.scrollLeft : within.offset.left;
+        var outerWidth = within.width;
+        var collisionPosLeft = position.left - data.collisionPosition.marginLeft;
+        var overLeft = withinOffset - collisionPosLeft;
+        var overRight = collisionPosLeft + data.collisionWidth - outerWidth - withinOffset;
+        var newOverRight;
+
+        if (data.collisionWidth > outerWidth) {
+          if (overLeft > 0 && overRight <= 0) {
+            newOverRight = position.left + overLeft + data.collisionWidth - outerWidth - withinOffset;
+            position.left += overLeft - newOverRight;
+          } else if (overRight > 0 && overLeft <= 0) {
+            position.left = withinOffset;
+          } else if (overLeft > overRight) {
+            position.left = withinOffset + outerWidth - data.collisionWidth;
+          } else {
+            position.left = withinOffset;
+          }
+        } else if (overLeft > 0) {
+          position.left += overLeft;
+        } else if (overRight > 0) {
+          position.left -= overRight;
+        } else {
+          position.left = max(position.left - collisionPosLeft, position.left);
+        }
+      },
+      top: function top(position, data) {
+        var within = data.within;
+        var withinOffset = within.isWindow ? within.scrollTop : within.offset.top;
+        var outerHeight = data.within.height;
+        var collisionPosTop = position.top - data.collisionPosition.marginTop;
+        var overTop = withinOffset - collisionPosTop;
+        var overBottom = collisionPosTop + data.collisionHeight - outerHeight - withinOffset;
+        var newOverBottom;
+
+        if (data.collisionHeight > outerHeight) {
+          if (overTop > 0 && overBottom <= 0) {
+            newOverBottom = position.top + overTop + data.collisionHeight - outerHeight - withinOffset;
+            position.top += overTop - newOverBottom;
+          } else if (overBottom > 0 && overTop <= 0) {
+            position.top = withinOffset;
+          } else if (overTop > overBottom) {
+            position.top = withinOffset + outerHeight - data.collisionHeight;
+          } else {
+            position.top = withinOffset;
+          }
+        } else if (overTop > 0) {
+          position.top += overTop;
+        } else if (overBottom > 0) {
+          position.top -= overBottom;
+        } else {
+          position.top = max(position.top - collisionPosTop, position.top);
+        }
+      }
+    },
+    flip: {
+      left: function left(position, data) {
+        var within = data.within;
+        var withinOffset = within.offset.left + within.scrollLeft;
+        var outerWidth = within.width;
+        var offsetLeft = within.isWindow ? within.scrollLeft : within.offset.left;
+        var collisionPosLeft = position.left - data.collisionPosition.marginLeft;
+        var overLeft = collisionPosLeft - offsetLeft;
+        var overRight = collisionPosLeft + data.collisionWidth - outerWidth - offsetLeft;
+        var myOffset = data.my[0] === 'left' ? -data.elemWidth : data.my[0] === 'right' ? data.elemWidth : 0;
+        var atOffset = data.at[0] === 'left' ? data.targetWidth : data.at[0] === 'right' ? -data.targetWidth : 0;
+        var offset = -2 * data.offset[0];
+        var newOverRight;
+        var newOverLeft;
+
+        if (overLeft < 0) {
+          newOverRight = position.left + myOffset + atOffset + offset + data.collisionWidth - outerWidth - withinOffset;
+
+          if (newOverRight < 0 || newOverRight < abs(overLeft)) {
+            position.left += myOffset + atOffset + offset;
+          }
+        } else if (overRight > 0) {
+          newOverLeft = position.left - data.collisionPosition.marginLeft + myOffset + atOffset + offset - offsetLeft;
+
+          if (newOverLeft > 0 || abs(newOverLeft) < overRight) {
+            position.left += myOffset + atOffset + offset;
+          }
+        }
+      },
+      top: function top(position, data) {
+        var within = data.within;
+        var withinOffset = within.offset.top + within.scrollTop;
+        var outerHeight = within.height;
+        var offsetTop = within.isWindow ? within.scrollTop : within.offset.top;
+        var collisionPosTop = position.top - data.collisionPosition.marginTop;
+        var overTop = collisionPosTop - offsetTop;
+        var overBottom = collisionPosTop + data.collisionHeight - outerHeight - offsetTop;
+        var top = data.my[1] === 'top';
+        var myOffset = top ? -data.elemHeight : data.my[1] === 'bottom' ? data.elemHeight : 0;
+        var atOffset = data.at[1] === 'top' ? data.targetHeight : data.at[1] === 'bottom' ? -data.targetHeight : 0;
+        var offset = -2 * data.offset[1];
+        var newOverTop;
+        var newOverBottom;
+
+        if (overTop < 0) {
+          newOverBottom = position.top + myOffset + atOffset + offset + data.collisionHeight - outerHeight - withinOffset;
+
+          if (newOverBottom < 0 || newOverBottom < abs(overTop)) {
+            position.top += myOffset + atOffset + offset;
+          }
+        } else if (overBottom > 0) {
+          newOverTop = position.top - data.collisionPosition.marginTop + myOffset + atOffset + offset - offsetTop;
+
+          if (newOverTop > 0 || abs(newOverTop) < overBottom) {
+            position.top += myOffset + atOffset + offset;
+          }
+        }
+      }
+    },
+    flipfit: {
+      left: function left() {
+        for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
+          args[_key] = arguments[_key];
+        }
+
+        collisions.flip.left.apply(this, args);
+        collisions.fit.left.apply(this, args);
+      },
+      top: function top() {
+        for (var _len2 = arguments.length, args = new Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {
+          args[_key2] = arguments[_key2];
+        }
+
+        collisions.flip.top.apply(this, args);
+        collisions.fit.top.apply(this, args);
+      }
+    }
+  };
+  $.position = {
+    scrollbarWidth: function scrollbarWidth() {
+      if (cachedScrollbarWidth !== undefined) {
+        return cachedScrollbarWidth;
+      }
+
+      var div = $('<div ' + "style='display:block;position:absolute;width:50px;height:50px;overflow:hidden;'>" + "<div style='height:100px;width:auto;'></div></div>");
+      var innerDiv = div.children()[0];
+      $('body').append(div);
+      var w1 = innerDiv.offsetWidth;
+      div.css('overflow', 'scroll');
+      var w2 = innerDiv.offsetWidth;
+
+      if (w1 === w2) {
+        w2 = div[0].clientWidth;
+      }
+
+      div.remove();
+      cachedScrollbarWidth = w1 - w2;
+      return cachedScrollbarWidth;
+    },
+    getScrollInfo: function getScrollInfo(within) {
+      var overflowX = within.isWindow || within.isDocument ? '' : within.element.css('overflow-x');
+      var overflowY = within.isWindow || within.isDocument ? '' : within.element.css('overflow-y');
+      var hasOverflowX = overflowX === 'scroll' || overflowX === 'auto' && within.width < within.element[0].scrollWidth;
+      var hasOverflowY = overflowY === 'scroll' || overflowY === 'auto' && within.height < within.element[0].scrollHeight;
+      return {
+        width: hasOverflowY ? $.position.scrollbarWidth() : 0,
+        height: hasOverflowX ? $.position.scrollbarWidth() : 0
+      };
+    },
+    getWithinInfo: function getWithinInfo(element) {
+      var withinElement = $(element || window);
+      var isWindow = $.isWindow(withinElement[0]);
+      var isDocument = !!withinElement[0] && withinElement[0].nodeType === 9;
+      var hasOffset = !isWindow && !isDocument;
+      return {
+        element: withinElement,
+        isWindow: isWindow,
+        isDocument: isDocument,
+        offset: hasOffset ? $(element).offset() : {
+          left: 0,
+          top: 0
+        },
+        scrollLeft: withinElement.scrollLeft(),
+        scrollTop: withinElement.scrollTop(),
+        width: withinElement.outerWidth(),
+        height: withinElement.outerHeight()
+      };
+    }
+  };
+
+  $.fn.position = function (options) {
+    if (!options || !options.of) {
+      return _position.apply(this, arguments);
+    }
+
+    options = $.extend({}, options);
+    var within = $.position.getWithinInfo(options.within);
+    var scrollInfo = $.position.getScrollInfo(within);
+    var collision = (options.collision || 'flip').split(' ');
+    var offsets = {};
+    var target = typeof options.of === 'string' ? $(document).find(options.of) : $(options.of);
+    var dimensions = getDimensions(target);
+    var targetWidth = dimensions.width;
+    var targetHeight = dimensions.height;
+    var targetOffset = dimensions.offset;
+
+    if (target[0].preventDefault) {
+      options.at = 'left top';
+    }
+
+    var basePosition = $.extend({}, targetOffset);
+    $.each(['my', 'at'], function () {
+      var pos = (options[this] || '').split(' ');
+
+      if (pos.length === 1) {
+        pos = regexHorizontal.test(pos[0]) ? pos.concat(['center']) : regexVertical.test(pos[0]) ? ['center'].concat(pos) : ['center', 'center'];
+      }
+
+      pos[0] = regexHorizontal.test(pos[0]) ? pos[0] : 'center';
+      pos[1] = regexVertical.test(pos[1]) ? pos[1] : 'center';
+      var horizontalOffset = regexOffset.exec(pos[0]);
+      var verticalOffset = regexOffset.exec(pos[1]);
+      offsets[this] = [horizontalOffset ? horizontalOffset[0] : 0, verticalOffset ? verticalOffset[0] : 0];
+      options[this] = [regexPosition.exec(pos[0])[0], regexPosition.exec(pos[1])[0]];
+    });
+
+    if (collision.length === 1) {
+      collision[1] = collision[0];
+    }
+
+    if (options.at[0] === 'right') {
+      basePosition.left += targetWidth;
+    } else if (options.at[0] === 'center') {
+      basePosition.left += targetWidth / 2;
+    }
+
+    if (options.at[1] === 'bottom') {
+      basePosition.top += targetHeight;
+    } else if (options.at[1] === 'center') {
+      basePosition.top += targetHeight / 2;
+    }
+
+    var atOffset = getOffsets(offsets.at, targetWidth, targetHeight);
+    basePosition.left += atOffset[0];
+    basePosition.top += atOffset[1];
+    return this.each(function () {
+      var using;
+      var elem = $(this);
+      var elemWidth = elem.outerWidth();
+      var elemHeight = elem.outerHeight();
+      var marginLeft = parseCss(this, 'marginLeft');
+      var marginTop = parseCss(this, 'marginTop');
+      var collisionWidth = elemWidth + marginLeft + parseCss(this, 'marginRight') + scrollInfo.width;
+      var collisionHeight = elemHeight + marginTop + parseCss(this, 'marginBottom') + scrollInfo.height;
+      var position = $.extend({}, basePosition);
+      var myOffset = getOffsets(offsets.my, elem.outerWidth(), elem.outerHeight());
+
+      if (options.my[0] === 'right') {
+        position.left -= elemWidth;
+      } else if (options.my[0] === 'center') {
+        position.left -= elemWidth / 2;
+      }
+
+      if (options.my[1] === 'bottom') {
+        position.top -= elemHeight;
+      } else if (options.my[1] === 'center') {
+        position.top -= elemHeight / 2;
+      }
+
+      position.left += myOffset[0];
+      position.top += myOffset[1];
+      var collisionPosition = {
+        marginLeft: marginLeft,
+        marginTop: marginTop
+      };
+      $.each(['left', 'top'], function (i, dir) {
+        if (collisions[collision[i]]) {
+          collisions[collision[i]][dir](position, {
+            targetWidth: targetWidth,
+            targetHeight: targetHeight,
+            elemWidth: elemWidth,
+            elemHeight: elemHeight,
+            collisionPosition: collisionPosition,
+            collisionWidth: collisionWidth,
+            collisionHeight: collisionHeight,
+            offset: [atOffset[0] + myOffset[0], atOffset[1] + myOffset[1]],
+            my: options.my,
+            at: options.at,
+            within: within,
+            elem: elem
+          });
+        }
+      });
+
+      if (options.using) {
+        using = function using(props) {
+          var left = targetOffset.left - position.left;
+          var right = left + targetWidth - elemWidth;
+          var top = targetOffset.top - position.top;
+          var bottom = top + targetHeight - elemHeight;
+          var feedback = {
+            target: {
+              element: target,
+              left: targetOffset.left,
+              top: targetOffset.top,
+              width: targetWidth,
+              height: targetHeight
+            },
+            element: {
+              element: elem,
+              left: position.left,
+              top: position.top,
+              width: elemWidth,
+              height: elemHeight
+            },
+            horizontal: right < 0 ? 'left' : left > 0 ? 'right' : 'center',
+            vertical: bottom < 0 ? 'top' : top > 0 ? 'bottom' : 'middle'
+          };
+
+          if (targetWidth < elemWidth && abs(left + right) < targetWidth) {
+            feedback.horizontal = 'center';
+          }
+
+          if (targetHeight < elemHeight && abs(top + bottom) < targetHeight) {
+            feedback.vertical = 'middle';
+          }
+
+          if (max(abs(left), abs(right)) > max(abs(top), abs(bottom))) {
+            feedback.important = 'horizontal';
+          } else {
+            feedback.important = 'vertical';
+          }
+
+          options.using.call(this, props, feedback);
+        };
+      }
+
+      elem.offset($.extend(position, {
+        using: using
+      }));
+    });
+  };
+
+  if (!$.hasOwnProperty('ui')) {
+    $.ui = {};
+  }
+
+  $.ui.position = collisions;
+})(jQuery);;
+/**
+ * @file
+ * Expands the behaviour of the default autocompletion.
+ */
+
+(function ($, Drupal, drupalSettings, once) {
+
+  'use strict';
+
+  // As a safety precaution, bail if the Drupal Core autocomplete framework is
+  // not present.
+  if (!Drupal.autocomplete) {
+    return;
+  }
+
+  var autocomplete = {};
+
+  /**
+   * Retrieves the custom settings for an autocomplete-enabled input field.
+   *
+   * @param {HTMLElement} input
+   *   The input field.
+   * @param {object} globalSettings
+   *   The object containing global settings. If none is passed, drupalSettings
+   *   is used instead.
+   *
+   * @return {object}
+   *   The effective settings for the given input fields, with defaults set if
+   *   applicable.
+   */
+  autocomplete.getSettings = function (input, globalSettings) {
+    globalSettings = globalSettings || drupalSettings || {};
+    // Set defaults for all known settings.
+    var settings = {
+      auto_submit: false,
+      delay: 0,
+      min_length: 1,
+      selector: ':submit',
+    };
+    var search = $(input).data('search-api-autocomplete-search');
+    if (search
+        && globalSettings.search_api_autocomplete
+        && globalSettings.search_api_autocomplete[search]) {
+      $.extend(settings, globalSettings.search_api_autocomplete[search]);
+    }
+    return settings;
+  };
+
+  /**
+   * Attaches our custom autocomplete settings to all affected fields.
+   *
+   * @type {Drupal~behavior}
+   *
+   * @prop {Drupal~behaviorAttach} attach
+   *   Attaches the autocomplete behaviors.
+   */
+  Drupal.behaviors.searchApiAutocomplete = {
+    attach: function (context, settings) {
+      // Find all our fields with autocomplete settings.
+      $(once('search-api-autocomplete',
+        '.ui-autocomplete-input[data-search-api-autocomplete-search]',
+        context)).each(function () {
+          var uiAutocomplete = $(this).data('ui-autocomplete');
+          if (!uiAutocomplete) {
+            return;
+          }
+          var $element = uiAutocomplete.menu.element;
+          $element.data('search-api-autocomplete-input-id', this.id);
+          $element.addClass('search-api-autocomplete-search');
+          var elementSettings = autocomplete.getSettings(this, settings);
+          if (elementSettings['delay']) {
+            uiAutocomplete.options['delay'] = elementSettings['delay'];
+          }
+          if (elementSettings['min_length']) {
+            uiAutocomplete.options['minLength'] = elementSettings['min_length'];
+          }
+          // Override the "select" callback of the jQuery UI autocomplete.
+          var oldSelect = uiAutocomplete.options.select;
+          uiAutocomplete.options.select = function (event, ui) {
+            // If this is a URL suggestion, instead of autocompleting we
+            // redirect the user to that URL.
+            if (ui.item.url) {
+              location.href = ui.item.url;
+              return false;
+            }
+
+            var ret = oldSelect.apply(this, arguments);
+
+            // If auto-submit is enabled, submit the form.
+            if (elementSettings['auto_submit'] && elementSettings['selector']) {
+              $(elementSettings['selector'], this.form).trigger('click');
+            }
+
+            return ret;
+          };
+        });
+    }
+  };
+
+  Drupal.SearchApiAutocomplete = autocomplete;
+
+})(jQuery, Drupal, drupalSettings, once);
+;
+(function ($, Drupal, window, document) {
+  'use strict';
+
+  // Example of Drupal behavior loaded.
+  Drupal.behaviors.tabsJS = {
+    attach: function (context, settings) {
+
+      $('.cp-tabs').not('.is-shorcut, .popup-no-tabs').tabs();
+
+      if ($('body').hasClass('js-mobile')) {
+        // Asistencias view more
+        $('.sub-tab__row').each(function () {
+          var row = $(this),
+            steps = row.find('.sub-tab__content ol li'),
+            num_steps = steps.length,
+            visible_steps = steps.slice(0, 3);
+          //row.children('.view-more').hide();
+          if (num_steps > 3) {
+            steps.each(function () {
+              $(this).hide()
+            });
+            visible_steps.each(function () {
+              $(this).show();
+            });
+            row.children('.view-more').css('visibility', 'visible');
+          }
+        });
+
+        // Tabs contact
+        if ($(".component__tabs--contact").length > 0) {
+          // Add click card in mobile
+          $('.component__tabs--contact .cp-tabs .component__card').on('click', function () {
+            var id_tab = $(this).children('.cta').children('a').attr('href');
+            if ($(this).parents('.cp-tabs').hasClass('popup-no-tabs')) {
+              window.location.replace(id_tab);
+              return false;
+            }
+            $(this).parents('.cp-tabs').children(id_tab).addClass('active');
+          });
+        }
+      }
+
+      var fix_subtabs_assistances = (function (select, tab) {
+        select
+          .find('option:eq(0)')
+          .attr('selected', 'selected')
+          .trigger('change');
+        select.triggerHandler('focus');
+        if (tab.find('.sub-tabs').tabs('instance') !== undefined) {
+          if (tab.parents('.block-tabs-assistances, .block-tabs-documents-required').length > 0) {
+            tab.find('.sub-tabs').tabs('destroy');
+          }
+        }
+      });
+
+      $(function () {
+        var id_tab = $('#tabs .component__heading ul li.ui-state-active a')
+          .attr('href'),
+          tab = $(id_tab),
+          select = tab.find('.select--tabs');
+
+        fix_subtabs_assistances(select, tab);
+      });
+
+      $('.cp-tabs ul li a').on('click', function (e) {
+        var el = $(this),
+          id_body_tab = el.attr('href'),
+          body_tab = el.parents('.cp-tabs').children(id_body_tab),
+          js_slider = body_tab.find('.js-slider-mobile'),
+          select = body_tab.find('.select--tabs');
+
+        if (select.length > 0) {
+          fix_subtabs_assistances(select, $(id_body_tab));
+        }
+
+        if (js_slider.length > 0) {
+          setTimeout(function () {
+            js_slider.find('.cog--items').slick('setPosition');
+          }, 10);
+        }
+      });
+
+      var getUrlParameter = function (sParam) {
+        var sPageURL = window.location.search.substring(1),
+          sURLVariables = sPageURL.split('&'),
+          sParameterName, i;
+        for (i = 0; i < sURLVariables.length; i++) {
+          sParameterName = sURLVariables[i].split('=');
+
+          if (sParameterName[0] === sParam) {
+            return sParameterName[1] === undefined ? true : decodeURIComponent(sParameterName[1]);
+          }
+        }
+      };
+
+      var active_tab = getUrlParameter("tab");
+
+      if (active_tab !== undefined) {
+        $('a[href="#tabs-' + active_tab + '"]').click();
+      }
+
+      $('.cp-tabs.is-shorcut .normal-tab a').on('click', function (e) {
+        e.preventDefault();
+        $('.cp-tabs.is-shorcut .normal-tab a').removeClass('active');
+        $(this).addClass('active');
+        var strAncla = $(this).attr('href'); //id del ancla
+
+        $(strAncla).offset().top;
+        $('html, body').stop(true, true).animate({
+          scrollTop: $(strAncla).offset().top - 70
+        }, 1000);
+      });
+
+      // Tabs
+      $(".select--tabs").change(function () {
+        if ($(this).parent().parent().parent().parent().find('.sub-tab__container').length > 0) {
+          $(this).parent().parent().parent().parent().find('.sub-tab__container').hide();
+          var id = $(this).val();
+          $('#' + id).show();
+        } else {
+          $('.tabs').hide();
+          $('#' + $(this).val()).show();
+        }
+      });
+
+      // Tabs contact
+      if ($(".component__tabs--contact").length > 0) {
+        // Add active tabs contact
+        $('.component__tabs--contact .cp-tabs li').removeClass('ui-tabs-active ui-state-active');
+        $('.component__tabs--contact .cp-tabs li .component__card a').click(function (e) {
+          e.preventDefault();
+          $(this).parents('.component__tabs--contact .cp-tabs li').addClass('ui-tabs-active ui-state-active');
+          var $id_tab = $(this).attr('href');
+          $id_tab = $id_tab.substr(1);
+          $(this).parents('.cp-tabs').find('.tabs').removeClass('active');
+          $(this).parents('.cp-tabs').find('#' + $id_tab).addClass('active');
+        });
+        $('.component__tabs--contact .cp-tabs .tabs form #close').click(function (e) {
+          $(this).parents('.tabs').removeClass('active');
+        });
+      }
+
+      // Hide subtabs if only exist 1 tab, show arrows on enterprise assitances
+      $('#sub-tabs .component__heading').each(function () {
+        var sub_tab = $(this),
+          select = sub_tab.find('.select--tabs'),
+          product_sub_tabs = select.find('option').length;
+
+        if (product_sub_tabs === 1) {
+          sub_tab.hide();
+        }
+      });
+
+      $('.sub-tab__row .view-more').on('click', function (e) {
+        e.preventDefault();
+        var parent = $(this).parents('.sub-tab__row');
+        parent.addClass('popup');
+        parent.find('.sub-tab__heading-img').addClass('card__img--oval');
+        parent.find('.sub-tab__content ol li').each(function () {
+          $(this).show();
+        });
+      });
+
+      $('.sub-tab__row .popup-close').on('click', function (e) {
+        e.preventDefault();
+        var parent = $(this).parents('.sub-tab__row');
+        parent.find('.sub-tab__heading-img').removeClass('card__img--oval');
+        parent.find('.sub-tab__content ol li').each(function (ind) {
+          if (ind > 2) {
+            $(this).hide();
+          }
+        });
+        parent.removeClass('popup');
+      });
+
+      $(function () {
+        // Componente menutabs fixed scroll detalle producto
+        var menu = $(".is-shorcut .main-links");
+        if (menu.length > 0) {
+          var menuFixed = Math.ceil(menu.offset().top),
+            menuFixedheight = menuFixed + 16;
+
+          $(window).scroll(function () {
+            var windowHeight = $(window).scrollTop();
+            if (windowHeight > menuFixedheight) {
+              menu.addClass('fixed')
+                .parent('.cog--mq').css('margin-bottom', '11.25rem');
+            }
+            else {
+              menu.removeClass('fixed')
+                .parent('.cog--mq').css('margin-bottom', '');
+            }
+          });
+        }
+      });
+
+      $(function () {
+        // Highlight actual component link on scroll
+        var menu = $(".is-shorcut");
+        if (menu.length > 0) {
+          $(window).scroll(function () {
+            menu.find('div.tabs').each(function () {
+              var el = $(this),
+                id = el.attr('id'),
+                menuFixed = Math.ceil(el.offset().top) - 80,
+                menuFixedheight = menuFixed,
+                windowHeight = $(window).scrollTop();
+
+              if (windowHeight > menuFixedheight) {
+                menu.find('a.active').removeClass('active');
+                menu.find('a[href="#' + id + '"]').addClass('active');
+              }
+            });
+          });
+        }
+      });
+
+      $('.component__shorcuts .sticky-item a').on('click', function (e) {
+        e.preventDefault();
+        $('.component__shorcuts .sticky-item, .component__shorcuts .sticky-item a').removeClass('active');
+        $(this).parent().addClass('active');
+        $(this).addClass('active');
+        var strAncla = $(this).attr('href'); //id del ancla
+
+        $(strAncla).offset().top;
+        $('html, body').stop(true, true).animate({
+          scrollTop: $(strAncla).offset().top - 70
+        }, 1000);
+        e.stopPropagation();
+      });
+
+      $(function () {
+        // Componente menutabs fixed scroll detalle producto
+        var menu = $(".component__shorcuts .sticky-wrapper");
+        if (menu.length > 0) {
+          var menuFixed = Math.ceil(menu.offset().top),
+            menuFixedheight = menuFixed + 16;
+
+          $(window).scroll(function () {
+            var windowHeight = $(window).scrollTop();
+            if (windowHeight > menuFixedheight) {
+              menu.addClass('is-fixed')
+                .parent('.sticky-container').css('margin-bottom', '11.25rem');
+            }
+            else {
+              menu.removeClass('is-fixed')
+                .parent('.sticky-container').css('margin-bottom', '');
+            }
+          });
+        }
+      });
+
+      $(function () {
+        // Highlight actual component link on scroll
+        var menu = $(".block-system-main-block");
+        if (menu.length > 0) {
+          $(window).scroll(function () {
+            menu.find('div.shortcut-item').each(function () {
+              var el = $(this),
+                id = el.attr('id'),
+                menuFixed = Math.ceil(el.offset().top) - 80,
+                menuFixedheight = menuFixed,
+                windowHeight = $(window).scrollTop();
+
+              if (windowHeight > menuFixedheight) {
+                menu.find('.sticky-item').removeClass('active');
+                menu.find('.sticky-item a').removeClass('active');
+                menu.find('.sticky-item a[href="#' + id + '"]').parent().addClass('active');
+                menu.find('.sticky-item a[href="#' + id + '"]').addClass('active');
+              }
+            });
+          });
+        }
+      });
+
+      $(window).bind('hashchange', function (e) {
+        location.reload(true);
+      });
+
+      // Agregando tabindex a cada tab
+      $('.cp-tabs').find('ul').children('li[role="tab"]').attr('tabindex', '0');
+
+      //menu mobile
+      $(".tabs--menu-mobile .tab--first a").click(function (e) {
+        e.preventDefault();
+        if (!$(".tab--first").hasClass("active")) {
+          $(".tab--second").removeClass("active");
+          $(".tab--first").addClass("active");
+
+          $(".tab-content--first").removeClass("is-desktop");
+          $(".tab-content--second").addClass("is-desktop");
+        }
+      });
+
+      $(".tabs--menu-mobile .tab--second a").click(function (e) {
+        e.preventDefault();
+        if (!$(".tab--second").hasClass("active")) {
+          $(".tab--first").removeClass("active");
+          $(".tab--second").addClass("active");
+
+          $(".tab-content--second").removeClass("is-desktop");
+          $(".tab-content--first").addClass("is-desktop");
+        }
+      });
+
+      // tabs mobile formas pago
+      $(".tabs--pagos-online .component__card").click(function (e) {
+        e.preventDefault();
+        $(".tabs--pagos-online .component__card").removeClass("item-active");
+        $(this).addClass("item-active");
+
+        $(".tabs__formas-de-pago #tab-0 .component").removeClass("is-hide-mb");
+        if ($(this).hasClass("item-first")) {
+          $(".tabs__formas-de-pago #tab-0 .js-item-second, .tabs__formas-de-pago #tab-0 .js-item-third").addClass("is-hide-mb");
+        }
+        if ($(this).hasClass("item-second")) {
+          $(".tabs__formas-de-pago #tab-0 .js-item-first, .tabs__formas-de-pago #tab-0 .js-item-third").addClass("is-hide-mb");
+        }
+        if ($(this).hasClass("item-third")) {
+          $(".tabs__formas-de-pago #tab-0 .js-item-first, .tabs__formas-de-pago #tab-0 .js-item-second").addClass("is-hide-mb");
+        }
+      });
+
+      $(".tabs--financia .component__card").click(function (e) {
+        e.preventDefault();
+        $(".tabs--financia .component__card").removeClass("item-active");
+        $(this).addClass("item-active");
+
+        $(".tabs__formas-de-pago #tab-1 .component").removeClass("is-hide-mb");
+        if ($(this).hasClass("item-first")) {
+          $(".tabs__formas-de-pago #tab-1 .js-item-second, .tabs__formas-de-pago #tab-1 .js-item-third").addClass("is-hide-mb");
+        }
+        if ($(this).hasClass("item-second")) {
+          $(".tabs__formas-de-pago #tab-1 .js-item-first, .tabs__formas-de-pago #tab-1 .js-item-third").addClass("is-hide-mb");
+        }
+        if ($(this).hasClass("item-third")) {
+          $(".tabs__formas-de-pago #tab-1 .js-item-first, .tabs__formas-de-pago #tab-1 .js-item-second").addClass("is-hide-mb");
+        }
+      });
+
+      $(".tabs--otras-formas-pago .component__card").click(function (e) {
+        e.preventDefault();
+        $(".tabs--otras-formas-pago .component__card").removeClass("item-active");
+        $(this).addClass("item-active");
+
+        $(".canales-pago .payment-row:nth-child(2), .canales-pago .payment-row:nth-child(3)").hide();
+        if ($(this).hasClass("item-first")) {
+          $(".canales-pago .payment-row:nth-child(2), .canales-pago .payment-row:nth-child(3)").hide();
+          $(".canales-pago .payment-row:nth-child(1)").show();
+        }
+        if ($(this).hasClass("item-second")) {
+          $(".canales-pago .payment-row:nth-child(1), .canales-pago .payment-row:nth-child(3)").hide();
+          $(".canales-pago .payment-row:nth-child(2)").show();
+        }
+        if ($(this).hasClass("item-third")) {
+          $(".canales-pago .payment-row:nth-child(1), .canales-pago .payment-row:nth-child(2)").hide();
+          $(".canales-pago .payment-row:nth-child(3)").show();
+        }
+      });
+    }
+  }
+})(jQuery, Drupal, this, this.document);
+;
+/*
+     _ _      _       _
+ ___| (_) ___| | __  (_)___
+/ __| | |/ __| |/ /  | / __|
+\__ \ | | (__|   < _ | \__ \
+|___/_|_|\___|_|\_(_)/ |___/
+                   |__/
+
+ Version: 1.9.0
+  Author: Ken Wheeler
+ Website: http://kenwheeler.github.io
+    Docs: http://kenwheeler.github.io/slick
+    Repo: http://github.com/kenwheeler/slick
+  Issues: http://github.com/kenwheeler/slick/issues
+
+ */
+(function(i){"use strict";"function"==typeof define&&define.amd?define(["jquery"],i):"undefined"!=typeof exports?module.exports=i(require("jquery")):i(jQuery)})(function(i){"use strict";var e=window.Slick||{};e=function(){function e(e,o){var s,n=this;n.defaults={accessibility:!0,adaptiveHeight:!1,appendArrows:i(e),appendDots:i(e),arrows:!0,asNavFor:null,prevArrow:'<button class="slick-prev" aria-label="Previous" type="button">Previous</button>',nextArrow:'<button class="slick-next" aria-label="Next" type="button">Next</button>',autoplay:!1,autoplaySpeed:3e3,centerMode:!1,centerPadding:"50px",cssEase:"ease",customPaging:function(e,t){return i('<button type="button" />').text(t+1)},dots:!1,dotsClass:"slick-dots",draggable:!0,easing:"linear",edgeFriction:.35,fade:!1,focusOnSelect:!1,focusOnChange:!1,infinite:!0,initialSlide:0,lazyLoad:"ondemand",mobileFirst:!1,pauseOnHover:!0,pauseOnFocus:!0,pauseOnDotsHover:!1,respondTo:"window",responsive:null,rows:1,rtl:!1,slide:"",slidesPerRow:1,slidesToShow:1,slidesToScroll:1,speed:500,swipe:!0,swipeToSlide:!1,touchMove:!0,touchThreshold:5,useCSS:!0,useTransform:!0,variableWidth:!1,vertical:!1,verticalSwiping:!1,waitForAnimate:!0,zIndex:1e3},n.initials={animating:!1,dragging:!1,autoPlayTimer:null,currentDirection:0,currentLeft:null,currentSlide:0,direction:1,$dots:null,listWidth:null,listHeight:null,loadIndex:0,$nextArrow:null,$prevArrow:null,scrolling:!1,slideCount:null,slideWidth:null,$slideTrack:null,$slides:null,sliding:!1,slideOffset:0,swipeLeft:null,swiping:!1,$list:null,touchObject:{},transformsEnabled:!1,unslicked:!1},i.extend(n,n.initials),n.activeBreakpoint=null,n.animType=null,n.animProp=null,n.breakpoints=[],n.breakpointSettings=[],n.cssTransitions=!1,n.focussed=!1,n.interrupted=!1,n.hidden="hidden",n.paused=!0,n.positionProp=null,n.respondTo=null,n.rowCount=1,n.shouldClick=!0,n.$slider=i(e),n.$slidesCache=null,n.transformType=null,n.transitionType=null,n.visibilityChange="visibilitychange",n.windowWidth=0,n.windowTimer=null,s=i(e).data("slick")||{},n.options=i.extend({},n.defaults,o,s),n.currentSlide=n.options.initialSlide,n.originalSettings=n.options,"undefined"!=typeof document.mozHidden?(n.hidden="mozHidden",n.visibilityChange="mozvisibilitychange"):"undefined"!=typeof document.webkitHidden&&(n.hidden="webkitHidden",n.visibilityChange="webkitvisibilitychange"),n.autoPlay=i.proxy(n.autoPlay,n),n.autoPlayClear=i.proxy(n.autoPlayClear,n),n.autoPlayIterator=i.proxy(n.autoPlayIterator,n),n.changeSlide=i.proxy(n.changeSlide,n),n.clickHandler=i.proxy(n.clickHandler,n),n.selectHandler=i.proxy(n.selectHandler,n),n.setPosition=i.proxy(n.setPosition,n),n.swipeHandler=i.proxy(n.swipeHandler,n),n.dragHandler=i.proxy(n.dragHandler,n),n.keyHandler=i.proxy(n.keyHandler,n),n.instanceUid=t++,n.htmlExpr=/^(?:\s*(<[\w\W]+>)[^>]*)$/,n.registerBreakpoints(),n.init(!0)}var t=0;return e}(),e.prototype.activateADA=function(){var i=this;i.$slideTrack.find(".slick-active").attr({"aria-hidden":"false"}).find("a, input, button, select").attr({tabindex:"0"})},e.prototype.addSlide=e.prototype.slickAdd=function(e,t,o){var s=this;if("boolean"==typeof t)o=t,t=null;else if(t<0||t>=s.slideCount)return!1;s.unload(),"number"==typeof t?0===t&&0===s.$slides.length?i(e).appendTo(s.$slideTrack):o?i(e).insertBefore(s.$slides.eq(t)):i(e).insertAfter(s.$slides.eq(t)):o===!0?i(e).prependTo(s.$slideTrack):i(e).appendTo(s.$slideTrack),s.$slides=s.$slideTrack.children(this.options.slide),s.$slideTrack.children(this.options.slide).detach(),s.$slideTrack.append(s.$slides),s.$slides.each(function(e,t){i(t).attr("data-slick-index",e)}),s.$slidesCache=s.$slides,s.reinit()},e.prototype.animateHeight=function(){var i=this;if(1===i.options.slidesToShow&&i.options.adaptiveHeight===!0&&i.options.vertical===!1){var e=i.$slides.eq(i.currentSlide).outerHeight(!0);i.$list.animate({height:e},i.options.speed)}},e.prototype.animateSlide=function(e,t){var o={},s=this;s.animateHeight(),s.options.rtl===!0&&s.options.vertical===!1&&(e=-e),s.transformsEnabled===!1?s.options.vertical===!1?s.$slideTrack.animate({left:e},s.options.speed,s.options.easing,t):s.$slideTrack.animate({top:e},s.options.speed,s.options.easing,t):s.cssTransitions===!1?(s.options.rtl===!0&&(s.currentLeft=-s.currentLeft),i({animStart:s.currentLeft}).animate({animStart:e},{duration:s.options.speed,easing:s.options.easing,step:function(i){i=Math.ceil(i),s.options.vertical===!1?(o[s.animType]="translate("+i+"px, 0px)",s.$slideTrack.css(o)):(o[s.animType]="translate(0px,"+i+"px)",s.$slideTrack.css(o))},complete:function(){t&&t.call()}})):(s.applyTransition(),e=Math.ceil(e),s.options.vertical===!1?o[s.animType]="translate3d("+e+"px, 0px, 0px)":o[s.animType]="translate3d(0px,"+e+"px, 0px)",s.$slideTrack.css(o),t&&setTimeout(function(){s.disableTransition(),t.call()},s.options.speed))},e.prototype.getNavTarget=function(){var e=this,t=e.options.asNavFor;return t&&null!==t&&(t=i(t).not(e.$slider)),t},e.prototype.asNavFor=function(e){var t=this,o=t.getNavTarget();null!==o&&"object"==typeof o&&o.each(function(){var t=i(this).slick("getSlick");t.unslicked||t.slideHandler(e,!0)})},e.prototype.applyTransition=function(i){var e=this,t={};e.options.fade===!1?t[e.transitionType]=e.transformType+" "+e.options.speed+"ms "+e.options.cssEase:t[e.transitionType]="opacity "+e.options.speed+"ms "+e.options.cssEase,e.options.fade===!1?e.$slideTrack.css(t):e.$slides.eq(i).css(t)},e.prototype.autoPlay=function(){var i=this;i.autoPlayClear(),i.slideCount>i.options.slidesToShow&&(i.autoPlayTimer=setInterval(i.autoPlayIterator,i.options.autoplaySpeed))},e.prototype.autoPlayClear=function(){var i=this;i.autoPlayTimer&&clearInterval(i.autoPlayTimer)},e.prototype.autoPlayIterator=function(){var i=this,e=i.currentSlide+i.options.slidesToScroll;i.paused||i.interrupted||i.focussed||(i.options.infinite===!1&&(1===i.direction&&i.currentSlide+1===i.slideCount-1?i.direction=0:0===i.direction&&(e=i.currentSlide-i.options.slidesToScroll,i.currentSlide-1===0&&(i.direction=1))),i.slideHandler(e))},e.prototype.buildArrows=function(){var e=this;e.options.arrows===!0&&(e.$prevArrow=i(e.options.prevArrow).addClass("slick-arrow"),e.$nextArrow=i(e.options.nextArrow).addClass("slick-arrow"),e.slideCount>e.options.slidesToShow?(e.$prevArrow.removeClass("slick-hidden").removeAttr("aria-hidden tabindex"),e.$nextArrow.removeClass("slick-hidden").removeAttr("aria-hidden tabindex"),e.htmlExpr.test(e.options.prevArrow)&&e.$prevArrow.prependTo(e.options.appendArrows),e.htmlExpr.test(e.options.nextArrow)&&e.$nextArrow.appendTo(e.options.appendArrows),e.options.infinite!==!0&&e.$prevArrow.addClass("slick-disabled").attr("aria-disabled","true")):e.$prevArrow.add(e.$nextArrow).addClass("slick-hidden").attr({"aria-disabled":"true",tabindex:"-1"}))},e.prototype.buildDots=function(){var e,t,o=this;if(o.options.dots===!0&&o.slideCount>o.options.slidesToShow){for(o.$slider.addClass("slick-dotted"),t=i("<ul />").addClass(o.options.dotsClass),e=0;e<=o.getDotCount();e+=1)t.append(i("<li />").append(o.options.customPaging.call(this,o,e)));o.$dots=t.appendTo(o.options.appendDots),o.$dots.find("li").first().addClass("slick-active")}},e.prototype.buildOut=function(){var e=this;e.$slides=e.$slider.children(e.options.slide+":not(.slick-cloned)").addClass("slick-slide"),e.slideCount=e.$slides.length,e.$slides.each(function(e,t){i(t).attr("data-slick-index",e).data("originalStyling",i(t).attr("style")||"")}),e.$slider.addClass("slick-slider"),e.$slideTrack=0===e.slideCount?i('<div class="slick-track"/>').appendTo(e.$slider):e.$slides.wrapAll('<div class="slick-track"/>').parent(),e.$list=e.$slideTrack.wrap('<div class="slick-list"/>').parent(),e.$slideTrack.css("opacity",0),e.options.centerMode!==!0&&e.options.swipeToSlide!==!0||(e.options.slidesToScroll=1),i("img[data-lazy]",e.$slider).not("[src]").addClass("slick-loading"),e.setupInfinite(),e.buildArrows(),e.buildDots(),e.updateDots(),e.setSlideClasses("number"==typeof e.currentSlide?e.currentSlide:0),e.options.draggable===!0&&e.$list.addClass("draggable")},e.prototype.buildRows=function(){var i,e,t,o,s,n,r,l=this;if(o=document.createDocumentFragment(),n=l.$slider.children(),l.options.rows>0){for(r=l.options.slidesPerRow*l.options.rows,s=Math.ceil(n.length/r),i=0;i<s;i++){var d=document.createElement("div");for(e=0;e<l.options.rows;e++){var a=document.createElement("div");for(t=0;t<l.options.slidesPerRow;t++){var c=i*r+(e*l.options.slidesPerRow+t);n.get(c)&&a.appendChild(n.get(c))}d.appendChild(a)}o.appendChild(d)}l.$slider.empty().append(o),l.$slider.children().children().children().css({width:100/l.options.slidesPerRow+"%",display:"inline-block"})}},e.prototype.checkResponsive=function(e,t){var o,s,n,r=this,l=!1,d=r.$slider.width(),a=window.innerWidth||i(window).width();if("window"===r.respondTo?n=a:"slider"===r.respondTo?n=d:"min"===r.respondTo&&(n=Math.min(a,d)),r.options.responsive&&r.options.responsive.length&&null!==r.options.responsive){s=null;for(o in r.breakpoints)r.breakpoints.hasOwnProperty(o)&&(r.originalSettings.mobileFirst===!1?n<r.breakpoints[o]&&(s=r.breakpoints[o]):n>r.breakpoints[o]&&(s=r.breakpoints[o]));null!==s?null!==r.activeBreakpoint?(s!==r.activeBreakpoint||t)&&(r.activeBreakpoint=s,"unslick"===r.breakpointSettings[s]?r.unslick(s):(r.options=i.extend({},r.originalSettings,r.breakpointSettings[s]),e===!0&&(r.currentSlide=r.options.initialSlide),r.refresh(e)),l=s):(r.activeBreakpoint=s,"unslick"===r.breakpointSettings[s]?r.unslick(s):(r.options=i.extend({},r.originalSettings,r.breakpointSettings[s]),e===!0&&(r.currentSlide=r.options.initialSlide),r.refresh(e)),l=s):null!==r.activeBreakpoint&&(r.activeBreakpoint=null,r.options=r.originalSettings,e===!0&&(r.currentSlide=r.options.initialSlide),r.refresh(e),l=s),e||l===!1||r.$slider.trigger("breakpoint",[r,l])}},e.prototype.changeSlide=function(e,t){var o,s,n,r=this,l=i(e.currentTarget);switch(l.is("a")&&e.preventDefault(),l.is("li")||(l=l.closest("li")),n=r.slideCount%r.options.slidesToScroll!==0,o=n?0:(r.slideCount-r.currentSlide)%r.options.slidesToScroll,e.data.message){case"previous":s=0===o?r.options.slidesToScroll:r.options.slidesToShow-o,r.slideCount>r.options.slidesToShow&&r.slideHandler(r.currentSlide-s,!1,t);break;case"next":s=0===o?r.options.slidesToScroll:o,r.slideCount>r.options.slidesToShow&&r.slideHandler(r.currentSlide+s,!1,t);break;case"index":var d=0===e.data.index?0:e.data.index||l.index()*r.options.slidesToScroll;r.slideHandler(r.checkNavigable(d),!1,t),l.children().trigger("focus");break;default:return}},e.prototype.checkNavigable=function(i){var e,t,o=this;if(e=o.getNavigableIndexes(),t=0,i>e[e.length-1])i=e[e.length-1];else for(var s in e){if(i<e[s]){i=t;break}t=e[s]}return i},e.prototype.cleanUpEvents=function(){var e=this;e.options.dots&&null!==e.$dots&&(i("li",e.$dots).off("click.slick",e.changeSlide).off("mouseenter.slick",i.proxy(e.interrupt,e,!0)).off("mouseleave.slick",i.proxy(e.interrupt,e,!1)),e.options.accessibility===!0&&e.$dots.off("keydown.slick",e.keyHandler)),e.$slider.off("focus.slick blur.slick"),e.options.arrows===!0&&e.slideCount>e.options.slidesToShow&&(e.$prevArrow&&e.$prevArrow.off("click.slick",e.changeSlide),e.$nextArrow&&e.$nextArrow.off("click.slick",e.changeSlide),e.options.accessibility===!0&&(e.$prevArrow&&e.$prevArrow.off("keydown.slick",e.keyHandler),e.$nextArrow&&e.$nextArrow.off("keydown.slick",e.keyHandler))),e.$list.off("touchstart.slick mousedown.slick",e.swipeHandler),e.$list.off("touchmove.slick mousemove.slick",e.swipeHandler),e.$list.off("touchend.slick mouseup.slick",e.swipeHandler),e.$list.off("touchcancel.slick mouseleave.slick",e.swipeHandler),e.$list.off("click.slick",e.clickHandler),i(document).off(e.visibilityChange,e.visibility),e.cleanUpSlideEvents(),e.options.accessibility===!0&&e.$list.off("keydown.slick",e.keyHandler),e.options.focusOnSelect===!0&&i(e.$slideTrack).children().off("click.slick",e.selectHandler),i(window).off("orientationchange.slick.slick-"+e.instanceUid,e.orientationChange),i(window).off("resize.slick.slick-"+e.instanceUid,e.resize),i("[draggable!=true]",e.$slideTrack).off("dragstart",e.preventDefault),i(window).off("load.slick.slick-"+e.instanceUid,e.setPosition)},e.prototype.cleanUpSlideEvents=function(){var e=this;e.$list.off("mouseenter.slick",i.proxy(e.interrupt,e,!0)),e.$list.off("mouseleave.slick",i.proxy(e.interrupt,e,!1))},e.prototype.cleanUpRows=function(){var i,e=this;e.options.rows>0&&(i=e.$slides.children().children(),i.removeAttr("style"),e.$slider.empty().append(i))},e.prototype.clickHandler=function(i){var e=this;e.shouldClick===!1&&(i.stopImmediatePropagation(),i.stopPropagation(),i.preventDefault())},e.prototype.destroy=function(e){var t=this;t.autoPlayClear(),t.touchObject={},t.cleanUpEvents(),i(".slick-cloned",t.$slider).detach(),t.$dots&&t.$dots.remove(),t.$prevArrow&&t.$prevArrow.length&&(t.$prevArrow.removeClass("slick-disabled slick-arrow slick-hidden").removeAttr("aria-hidden aria-disabled tabindex").css("display",""),t.htmlExpr.test(t.options.prevArrow)&&t.$prevArrow.remove()),t.$nextArrow&&t.$nextArrow.length&&(t.$nextArrow.removeClass("slick-disabled slick-arrow slick-hidden").removeAttr("aria-hidden aria-disabled tabindex").css("display",""),t.htmlExpr.test(t.options.nextArrow)&&t.$nextArrow.remove()),t.$slides&&(t.$slides.removeClass("slick-slide slick-active slick-center slick-visible slick-current").removeAttr("aria-hidden").removeAttr("data-slick-index").each(function(){i(this).attr("style",i(this).data("originalStyling"))}),t.$slideTrack.children(this.options.slide).detach(),t.$slideTrack.detach(),t.$list.detach(),t.$slider.append(t.$slides)),t.cleanUpRows(),t.$slider.removeClass("slick-slider"),t.$slider.removeClass("slick-initialized"),t.$slider.removeClass("slick-dotted"),t.unslicked=!0,e||t.$slider.trigger("destroy",[t])},e.prototype.disableTransition=function(i){var e=this,t={};t[e.transitionType]="",e.options.fade===!1?e.$slideTrack.css(t):e.$slides.eq(i).css(t)},e.prototype.fadeSlide=function(i,e){var t=this;t.cssTransitions===!1?(t.$slides.eq(i).css({zIndex:t.options.zIndex}),t.$slides.eq(i).animate({opacity:1},t.options.speed,t.options.easing,e)):(t.applyTransition(i),t.$slides.eq(i).css({opacity:1,zIndex:t.options.zIndex}),e&&setTimeout(function(){t.disableTransition(i),e.call()},t.options.speed))},e.prototype.fadeSlideOut=function(i){var e=this;e.cssTransitions===!1?e.$slides.eq(i).animate({opacity:0,zIndex:e.options.zIndex-2},e.options.speed,e.options.easing):(e.applyTransition(i),e.$slides.eq(i).css({opacity:0,zIndex:e.options.zIndex-2}))},e.prototype.filterSlides=e.prototype.slickFilter=function(i){var e=this;null!==i&&(e.$slidesCache=e.$slides,e.unload(),e.$slideTrack.children(this.options.slide).detach(),e.$slidesCache.filter(i).appendTo(e.$slideTrack),e.reinit())},e.prototype.focusHandler=function(){var e=this;e.$slider.off("focus.slick blur.slick").on("focus.slick","*",function(t){var o=i(this);setTimeout(function(){e.options.pauseOnFocus&&o.is(":focus")&&(e.focussed=!0,e.autoPlay())},0)}).on("blur.slick","*",function(t){i(this);e.options.pauseOnFocus&&(e.focussed=!1,e.autoPlay())})},e.prototype.getCurrent=e.prototype.slickCurrentSlide=function(){var i=this;return i.currentSlide},e.prototype.getDotCount=function(){var i=this,e=0,t=0,o=0;if(i.options.infinite===!0)if(i.slideCount<=i.options.slidesToShow)++o;else for(;e<i.slideCount;)++o,e=t+i.options.slidesToScroll,t+=i.options.slidesToScroll<=i.options.slidesToShow?i.options.slidesToScroll:i.options.slidesToShow;else if(i.options.centerMode===!0)o=i.slideCount;else if(i.options.asNavFor)for(;e<i.slideCount;)++o,e=t+i.options.slidesToScroll,t+=i.options.slidesToScroll<=i.options.slidesToShow?i.options.slidesToScroll:i.options.slidesToShow;else o=1+Math.ceil((i.slideCount-i.options.slidesToShow)/i.options.slidesToScroll);return o-1},e.prototype.getLeft=function(i){var e,t,o,s,n=this,r=0;return n.slideOffset=0,t=n.$slides.first().outerHeight(!0),n.options.infinite===!0?(n.slideCount>n.options.slidesToShow&&(n.slideOffset=n.slideWidth*n.options.slidesToShow*-1,s=-1,n.options.vertical===!0&&n.options.centerMode===!0&&(2===n.options.slidesToShow?s=-1.5:1===n.options.slidesToShow&&(s=-2)),r=t*n.options.slidesToShow*s),n.slideCount%n.options.slidesToScroll!==0&&i+n.options.slidesToScroll>n.slideCount&&n.slideCount>n.options.slidesToShow&&(i>n.slideCount?(n.slideOffset=(n.options.slidesToShow-(i-n.slideCount))*n.slideWidth*-1,r=(n.options.slidesToShow-(i-n.slideCount))*t*-1):(n.slideOffset=n.slideCount%n.options.slidesToScroll*n.slideWidth*-1,r=n.slideCount%n.options.slidesToScroll*t*-1))):i+n.options.slidesToShow>n.slideCount&&(n.slideOffset=(i+n.options.slidesToShow-n.slideCount)*n.slideWidth,r=(i+n.options.slidesToShow-n.slideCount)*t),n.slideCount<=n.options.slidesToShow&&(n.slideOffset=0,r=0),n.options.centerMode===!0&&n.slideCount<=n.options.slidesToShow?n.slideOffset=n.slideWidth*Math.floor(n.options.slidesToShow)/2-n.slideWidth*n.slideCount/2:n.options.centerMode===!0&&n.options.infinite===!0?n.slideOffset+=n.slideWidth*Math.floor(n.options.slidesToShow/2)-n.slideWidth:n.options.centerMode===!0&&(n.slideOffset=0,n.slideOffset+=n.slideWidth*Math.floor(n.options.slidesToShow/2)),e=n.options.vertical===!1?i*n.slideWidth*-1+n.slideOffset:i*t*-1+r,n.options.variableWidth===!0&&(o=n.slideCount<=n.options.slidesToShow||n.options.infinite===!1?n.$slideTrack.children(".slick-slide").eq(i):n.$slideTrack.children(".slick-slide").eq(i+n.options.slidesToShow),e=n.options.rtl===!0?o[0]?(n.$slideTrack.width()-o[0].offsetLeft-o.width())*-1:0:o[0]?o[0].offsetLeft*-1:0,n.options.centerMode===!0&&(o=n.slideCount<=n.options.slidesToShow||n.options.infinite===!1?n.$slideTrack.children(".slick-slide").eq(i):n.$slideTrack.children(".slick-slide").eq(i+n.options.slidesToShow+1),e=n.options.rtl===!0?o[0]?(n.$slideTrack.width()-o[0].offsetLeft-o.width())*-1:0:o[0]?o[0].offsetLeft*-1:0,e+=(n.$list.width()-o.outerWidth())/2)),e},e.prototype.getOption=e.prototype.slickGetOption=function(i){var e=this;return e.options[i]},e.prototype.getNavigableIndexes=function(){var i,e=this,t=0,o=0,s=[];for(e.options.infinite===!1?i=e.slideCount:(t=e.options.slidesToScroll*-1,o=e.options.slidesToScroll*-1,i=2*e.slideCount);t<i;)s.push(t),t=o+e.options.slidesToScroll,o+=e.options.slidesToScroll<=e.options.slidesToShow?e.options.slidesToScroll:e.options.slidesToShow;return s},e.prototype.getSlick=function(){return this},e.prototype.getSlideCount=function(){var e,t,o,s,n=this;return s=n.options.centerMode===!0?Math.floor(n.$list.width()/2):0,o=n.swipeLeft*-1+s,n.options.swipeToSlide===!0?(n.$slideTrack.find(".slick-slide").each(function(e,s){var r,l,d;if(r=i(s).outerWidth(),l=s.offsetLeft,n.options.centerMode!==!0&&(l+=r/2),d=l+r,o<d)return t=s,!1}),e=Math.abs(i(t).attr("data-slick-index")-n.currentSlide)||1):n.options.slidesToScroll},e.prototype.goTo=e.prototype.slickGoTo=function(i,e){var t=this;t.changeSlide({data:{message:"index",index:parseInt(i)}},e)},e.prototype.init=function(e){var t=this;i(t.$slider).hasClass("slick-initialized")||(i(t.$slider).addClass("slick-initialized"),t.buildRows(),t.buildOut(),t.setProps(),t.startLoad(),t.loadSlider(),t.initializeEvents(),t.updateArrows(),t.updateDots(),t.checkResponsive(!0),t.focusHandler()),e&&t.$slider.trigger("init",[t]),t.options.accessibility===!0&&t.initADA(),t.options.autoplay&&(t.paused=!1,t.autoPlay())},e.prototype.initADA=function(){var e=this,t=Math.ceil(e.slideCount/e.options.slidesToShow),o=e.getNavigableIndexes().filter(function(i){return i>=0&&i<e.slideCount});e.$slides.add(e.$slideTrack.find(".slick-cloned")).attr({"aria-hidden":"true",tabindex:"-1"}).find("a, input, button, select").attr({tabindex:"-1"}),null!==e.$dots&&(e.$slides.not(e.$slideTrack.find(".slick-cloned")).each(function(t){var s=o.indexOf(t);if(i(this).attr({role:"tabpanel",id:"slick-slide"+e.instanceUid+t,tabindex:-1}),s!==-1){var n="slick-slide-control"+e.instanceUid+s;i("#"+n).length&&i(this).attr({"aria-describedby":n})}}),e.$dots.attr("role","tablist").find("li").each(function(s){var n=o[s];i(this).attr({role:"presentation"}),i(this).find("button").first().attr({role:"tab",id:"slick-slide-control"+e.instanceUid+s,"aria-controls":"slick-slide"+e.instanceUid+n,"aria-label":s+1+" of "+t,"aria-selected":null,tabindex:"-1"})}).eq(e.currentSlide).find("button").attr({"aria-selected":"true",tabindex:"0"}).end());for(var s=e.currentSlide,n=s+e.options.slidesToShow;s<n;s++)e.options.focusOnChange?e.$slides.eq(s).attr({tabindex:"0"}):e.$slides.eq(s).removeAttr("tabindex");e.activateADA()},e.prototype.initArrowEvents=function(){var i=this;i.options.arrows===!0&&i.slideCount>i.options.slidesToShow&&(i.$prevArrow.off("click.slick").on("click.slick",{message:"previous"},i.changeSlide),i.$nextArrow.off("click.slick").on("click.slick",{message:"next"},i.changeSlide),i.options.accessibility===!0&&(i.$prevArrow.on("keydown.slick",i.keyHandler),i.$nextArrow.on("keydown.slick",i.keyHandler)))},e.prototype.initDotEvents=function(){var e=this;e.options.dots===!0&&e.slideCount>e.options.slidesToShow&&(i("li",e.$dots).on("click.slick",{message:"index"},e.changeSlide),e.options.accessibility===!0&&e.$dots.on("keydown.slick",e.keyHandler)),e.options.dots===!0&&e.options.pauseOnDotsHover===!0&&e.slideCount>e.options.slidesToShow&&i("li",e.$dots).on("mouseenter.slick",i.proxy(e.interrupt,e,!0)).on("mouseleave.slick",i.proxy(e.interrupt,e,!1))},e.prototype.initSlideEvents=function(){var e=this;e.options.pauseOnHover&&(e.$list.on("mouseenter.slick",i.proxy(e.interrupt,e,!0)),e.$list.on("mouseleave.slick",i.proxy(e.interrupt,e,!1)))},e.prototype.initializeEvents=function(){var e=this;e.initArrowEvents(),e.initDotEvents(),e.initSlideEvents(),e.$list.on("touchstart.slick mousedown.slick",{action:"start"},e.swipeHandler),e.$list.on("touchmove.slick mousemove.slick",{action:"move"},e.swipeHandler),e.$list.on("touchend.slick mouseup.slick",{action:"end"},e.swipeHandler),e.$list.on("touchcancel.slick mouseleave.slick",{action:"end"},e.swipeHandler),e.$list.on("click.slick",e.clickHandler),i(document).on(e.visibilityChange,i.proxy(e.visibility,e)),e.options.accessibility===!0&&e.$list.on("keydown.slick",e.keyHandler),e.options.focusOnSelect===!0&&i(e.$slideTrack).children().on("click.slick",e.selectHandler),i(window).on("orientationchange.slick.slick-"+e.instanceUid,i.proxy(e.orientationChange,e)),i(window).on("resize.slick.slick-"+e.instanceUid,i.proxy(e.resize,e)),i("[draggable!=true]",e.$slideTrack).on("dragstart",e.preventDefault),i(window).on("load.slick.slick-"+e.instanceUid,e.setPosition),i(e.setPosition)},e.prototype.initUI=function(){var i=this;i.options.arrows===!0&&i.slideCount>i.options.slidesToShow&&(i.$prevArrow.show(),i.$nextArrow.show()),i.options.dots===!0&&i.slideCount>i.options.slidesToShow&&i.$dots.show()},e.prototype.keyHandler=function(i){var e=this;i.target.tagName.match("TEXTAREA|INPUT|SELECT")||(37===i.keyCode&&e.options.accessibility===!0?e.changeSlide({data:{message:e.options.rtl===!0?"next":"previous"}}):39===i.keyCode&&e.options.accessibility===!0&&e.changeSlide({data:{message:e.options.rtl===!0?"previous":"next"}}))},e.prototype.lazyLoad=function(){function e(e){i("img[data-lazy]",e).each(function(){var e=i(this),t=i(this).attr("data-lazy"),o=i(this).attr("data-srcset"),s=i(this).attr("data-sizes")||r.$slider.attr("data-sizes"),n=document.createElement("img");n.onload=function(){e.animate({opacity:0},100,function(){o&&(e.attr("srcset",o),s&&e.attr("sizes",s)),e.attr("src",t).animate({opacity:1},200,function(){e.removeAttr("data-lazy data-srcset data-sizes").removeClass("slick-loading")}),r.$slider.trigger("lazyLoaded",[r,e,t])})},n.onerror=function(){e.removeAttr("data-lazy").removeClass("slick-loading").addClass("slick-lazyload-error"),r.$slider.trigger("lazyLoadError",[r,e,t])},n.src=t})}var t,o,s,n,r=this;if(r.options.centerMode===!0?r.options.infinite===!0?(s=r.currentSlide+(r.options.slidesToShow/2+1),n=s+r.options.slidesToShow+2):(s=Math.max(0,r.currentSlide-(r.options.slidesToShow/2+1)),n=2+(r.options.slidesToShow/2+1)+r.currentSlide):(s=r.options.infinite?r.options.slidesToShow+r.currentSlide:r.currentSlide,n=Math.ceil(s+r.options.slidesToShow),r.options.fade===!0&&(s>0&&s--,n<=r.slideCount&&n++)),t=r.$slider.find(".slick-slide").slice(s,n),"anticipated"===r.options.lazyLoad)for(var l=s-1,d=n,a=r.$slider.find(".slick-slide"),c=0;c<r.options.slidesToScroll;c++)l<0&&(l=r.slideCount-1),t=t.add(a.eq(l)),t=t.add(a.eq(d)),l--,d++;e(t),r.slideCount<=r.options.slidesToShow?(o=r.$slider.find(".slick-slide"),e(o)):r.currentSlide>=r.slideCount-r.options.slidesToShow?(o=r.$slider.find(".slick-cloned").slice(0,r.options.slidesToShow),e(o)):0===r.currentSlide&&(o=r.$slider.find(".slick-cloned").slice(r.options.slidesToShow*-1),e(o))},e.prototype.loadSlider=function(){var i=this;i.setPosition(),i.$slideTrack.css({opacity:1}),i.$slider.removeClass("slick-loading"),i.initUI(),"progressive"===i.options.lazyLoad&&i.progressiveLazyLoad()},e.prototype.next=e.prototype.slickNext=function(){var i=this;i.changeSlide({data:{message:"next"}})},e.prototype.orientationChange=function(){var i=this;i.checkResponsive(),i.setPosition()},e.prototype.pause=e.prototype.slickPause=function(){var i=this;i.autoPlayClear(),i.paused=!0},e.prototype.play=e.prototype.slickPlay=function(){var i=this;i.autoPlay(),i.options.autoplay=!0,i.paused=!1,i.focussed=!1,i.interrupted=!1},e.prototype.postSlide=function(e){var t=this;if(!t.unslicked&&(t.$slider.trigger("afterChange",[t,e]),t.animating=!1,t.slideCount>t.options.slidesToShow&&t.setPosition(),t.swipeLeft=null,t.options.autoplay&&t.autoPlay(),t.options.accessibility===!0&&(t.initADA(),t.options.focusOnChange))){var o=i(t.$slides.get(t.currentSlide));o.attr("tabindex",0).focus()}},e.prototype.prev=e.prototype.slickPrev=function(){var i=this;i.changeSlide({data:{message:"previous"}})},e.prototype.preventDefault=function(i){i.preventDefault()},e.prototype.progressiveLazyLoad=function(e){e=e||1;var t,o,s,n,r,l=this,d=i("img[data-lazy]",l.$slider);d.length?(t=d.first(),o=t.attr("data-lazy"),s=t.attr("data-srcset"),n=t.attr("data-sizes")||l.$slider.attr("data-sizes"),r=document.createElement("img"),r.onload=function(){s&&(t.attr("srcset",s),n&&t.attr("sizes",n)),t.attr("src",o).removeAttr("data-lazy data-srcset data-sizes").removeClass("slick-loading"),l.options.adaptiveHeight===!0&&l.setPosition(),l.$slider.trigger("lazyLoaded",[l,t,o]),l.progressiveLazyLoad()},r.onerror=function(){e<3?setTimeout(function(){l.progressiveLazyLoad(e+1)},500):(t.removeAttr("data-lazy").removeClass("slick-loading").addClass("slick-lazyload-error"),l.$slider.trigger("lazyLoadError",[l,t,o]),l.progressiveLazyLoad())},r.src=o):l.$slider.trigger("allImagesLoaded",[l])},e.prototype.refresh=function(e){var t,o,s=this;o=s.slideCount-s.options.slidesToShow,!s.options.infinite&&s.currentSlide>o&&(s.currentSlide=o),s.slideCount<=s.options.slidesToShow&&(s.currentSlide=0),t=s.currentSlide,s.destroy(!0),i.extend(s,s.initials,{currentSlide:t}),s.init(),e||s.changeSlide({data:{message:"index",index:t}},!1)},e.prototype.registerBreakpoints=function(){var e,t,o,s=this,n=s.options.responsive||null;if("array"===i.type(n)&&n.length){s.respondTo=s.options.respondTo||"window";for(e in n)if(o=s.breakpoints.length-1,n.hasOwnProperty(e)){for(t=n[e].breakpoint;o>=0;)s.breakpoints[o]&&s.breakpoints[o]===t&&s.breakpoints.splice(o,1),o--;s.breakpoints.push(t),s.breakpointSettings[t]=n[e].settings}s.breakpoints.sort(function(i,e){return s.options.mobileFirst?i-e:e-i})}},e.prototype.reinit=function(){var e=this;e.$slides=e.$slideTrack.children(e.options.slide).addClass("slick-slide"),e.slideCount=e.$slides.length,e.currentSlide>=e.slideCount&&0!==e.currentSlide&&(e.currentSlide=e.currentSlide-e.options.slidesToScroll),e.slideCount<=e.options.slidesToShow&&(e.currentSlide=0),e.registerBreakpoints(),e.setProps(),e.setupInfinite(),e.buildArrows(),e.updateArrows(),e.initArrowEvents(),e.buildDots(),e.updateDots(),e.initDotEvents(),e.cleanUpSlideEvents(),e.initSlideEvents(),e.checkResponsive(!1,!0),e.options.focusOnSelect===!0&&i(e.$slideTrack).children().on("click.slick",e.selectHandler),e.setSlideClasses("number"==typeof e.currentSlide?e.currentSlide:0),e.setPosition(),e.focusHandler(),e.paused=!e.options.autoplay,e.autoPlay(),e.$slider.trigger("reInit",[e])},e.prototype.resize=function(){var e=this;i(window).width()!==e.windowWidth&&(clearTimeout(e.windowDelay),e.windowDelay=window.setTimeout(function(){e.windowWidth=i(window).width(),e.checkResponsive(),e.unslicked||e.setPosition()},50))},e.prototype.removeSlide=e.prototype.slickRemove=function(i,e,t){var o=this;return"boolean"==typeof i?(e=i,i=e===!0?0:o.slideCount-1):i=e===!0?--i:i,!(o.slideCount<1||i<0||i>o.slideCount-1)&&(o.unload(),t===!0?o.$slideTrack.children().remove():o.$slideTrack.children(this.options.slide).eq(i).remove(),o.$slides=o.$slideTrack.children(this.options.slide),o.$slideTrack.children(this.options.slide).detach(),o.$slideTrack.append(o.$slides),o.$slidesCache=o.$slides,void o.reinit())},e.prototype.setCSS=function(i){var e,t,o=this,s={};o.options.rtl===!0&&(i=-i),e="left"==o.positionProp?Math.ceil(i)+"px":"0px",t="top"==o.positionProp?Math.ceil(i)+"px":"0px",s[o.positionProp]=i,o.transformsEnabled===!1?o.$slideTrack.css(s):(s={},o.cssTransitions===!1?(s[o.animType]="translate("+e+", "+t+")",o.$slideTrack.css(s)):(s[o.animType]="translate3d("+e+", "+t+", 0px)",o.$slideTrack.css(s)))},e.prototype.setDimensions=function(){var i=this;i.options.vertical===!1?i.options.centerMode===!0&&i.$list.css({padding:"0px "+i.options.centerPadding}):(i.$list.height(i.$slides.first().outerHeight(!0)*i.options.slidesToShow),i.options.centerMode===!0&&i.$list.css({padding:i.options.centerPadding+" 0px"})),i.listWidth=i.$list.width(),i.listHeight=i.$list.height(),i.options.vertical===!1&&i.options.variableWidth===!1?(i.slideWidth=Math.ceil(i.listWidth/i.options.slidesToShow),i.$slideTrack.width(Math.ceil(i.slideWidth*i.$slideTrack.children(".slick-slide").length))):i.options.variableWidth===!0?i.$slideTrack.width(5e3*i.slideCount):(i.slideWidth=Math.ceil(i.listWidth),i.$slideTrack.height(Math.ceil(i.$slides.first().outerHeight(!0)*i.$slideTrack.children(".slick-slide").length)));var e=i.$slides.first().outerWidth(!0)-i.$slides.first().width();i.options.variableWidth===!1&&i.$slideTrack.children(".slick-slide").width(i.slideWidth-e)},e.prototype.setFade=function(){var e,t=this;t.$slides.each(function(o,s){e=t.slideWidth*o*-1,t.options.rtl===!0?i(s).css({position:"relative",right:e,top:0,zIndex:t.options.zIndex-2,opacity:0}):i(s).css({position:"relative",left:e,top:0,zIndex:t.options.zIndex-2,opacity:0})}),t.$slides.eq(t.currentSlide).css({zIndex:t.options.zIndex-1,opacity:1})},e.prototype.setHeight=function(){var i=this;if(1===i.options.slidesToShow&&i.options.adaptiveHeight===!0&&i.options.vertical===!1){var e=i.$slides.eq(i.currentSlide).outerHeight(!0);i.$list.css("height",e)}},e.prototype.setOption=e.prototype.slickSetOption=function(){var e,t,o,s,n,r=this,l=!1;if("object"===i.type(arguments[0])?(o=arguments[0],l=arguments[1],n="multiple"):"string"===i.type(arguments[0])&&(o=arguments[0],s=arguments[1],l=arguments[2],"responsive"===arguments[0]&&"array"===i.type(arguments[1])?n="responsive":"undefined"!=typeof arguments[1]&&(n="single")),"single"===n)r.options[o]=s;else if("multiple"===n)i.each(o,function(i,e){r.options[i]=e});else if("responsive"===n)for(t in s)if("array"!==i.type(r.options.responsive))r.options.responsive=[s[t]];else{for(e=r.options.responsive.length-1;e>=0;)r.options.responsive[e].breakpoint===s[t].breakpoint&&r.options.responsive.splice(e,1),e--;r.options.responsive.push(s[t])}l&&(r.unload(),r.reinit())},e.prototype.setPosition=function(){var i=this;i.setDimensions(),i.setHeight(),i.options.fade===!1?i.setCSS(i.getLeft(i.currentSlide)):i.setFade(),i.$slider.trigger("setPosition",[i])},e.prototype.setProps=function(){var i=this,e=document.body.style;i.positionProp=i.options.vertical===!0?"top":"left",
+"top"===i.positionProp?i.$slider.addClass("slick-vertical"):i.$slider.removeClass("slick-vertical"),void 0===e.WebkitTransition&&void 0===e.MozTransition&&void 0===e.msTransition||i.options.useCSS===!0&&(i.cssTransitions=!0),i.options.fade&&("number"==typeof i.options.zIndex?i.options.zIndex<3&&(i.options.zIndex=3):i.options.zIndex=i.defaults.zIndex),void 0!==e.OTransform&&(i.animType="OTransform",i.transformType="-o-transform",i.transitionType="OTransition",void 0===e.perspectiveProperty&&void 0===e.webkitPerspective&&(i.animType=!1)),void 0!==e.MozTransform&&(i.animType="MozTransform",i.transformType="-moz-transform",i.transitionType="MozTransition",void 0===e.perspectiveProperty&&void 0===e.MozPerspective&&(i.animType=!1)),void 0!==e.webkitTransform&&(i.animType="webkitTransform",i.transformType="-webkit-transform",i.transitionType="webkitTransition",void 0===e.perspectiveProperty&&void 0===e.webkitPerspective&&(i.animType=!1)),void 0!==e.msTransform&&(i.animType="msTransform",i.transformType="-ms-transform",i.transitionType="msTransition",void 0===e.msTransform&&(i.animType=!1)),void 0!==e.transform&&i.animType!==!1&&(i.animType="transform",i.transformType="transform",i.transitionType="transition"),i.transformsEnabled=i.options.useTransform&&null!==i.animType&&i.animType!==!1},e.prototype.setSlideClasses=function(i){var e,t,o,s,n=this;if(t=n.$slider.find(".slick-slide").removeClass("slick-active slick-center slick-current").attr("aria-hidden","true"),n.$slides.eq(i).addClass("slick-current"),n.options.centerMode===!0){var r=n.options.slidesToShow%2===0?1:0;e=Math.floor(n.options.slidesToShow/2),n.options.infinite===!0&&(i>=e&&i<=n.slideCount-1-e?n.$slides.slice(i-e+r,i+e+1).addClass("slick-active").attr("aria-hidden","false"):(o=n.options.slidesToShow+i,t.slice(o-e+1+r,o+e+2).addClass("slick-active").attr("aria-hidden","false")),0===i?t.eq(t.length-1-n.options.slidesToShow).addClass("slick-center"):i===n.slideCount-1&&t.eq(n.options.slidesToShow).addClass("slick-center")),n.$slides.eq(i).addClass("slick-center")}else i>=0&&i<=n.slideCount-n.options.slidesToShow?n.$slides.slice(i,i+n.options.slidesToShow).addClass("slick-active").attr("aria-hidden","false"):t.length<=n.options.slidesToShow?t.addClass("slick-active").attr("aria-hidden","false"):(s=n.slideCount%n.options.slidesToShow,o=n.options.infinite===!0?n.options.slidesToShow+i:i,n.options.slidesToShow==n.options.slidesToScroll&&n.slideCount-i<n.options.slidesToShow?t.slice(o-(n.options.slidesToShow-s),o+s).addClass("slick-active").attr("aria-hidden","false"):t.slice(o,o+n.options.slidesToShow).addClass("slick-active").attr("aria-hidden","false"));"ondemand"!==n.options.lazyLoad&&"anticipated"!==n.options.lazyLoad||n.lazyLoad()},e.prototype.setupInfinite=function(){var e,t,o,s=this;if(s.options.fade===!0&&(s.options.centerMode=!1),s.options.infinite===!0&&s.options.fade===!1&&(t=null,s.slideCount>s.options.slidesToShow)){for(o=s.options.centerMode===!0?s.options.slidesToShow+1:s.options.slidesToShow,e=s.slideCount;e>s.slideCount-o;e-=1)t=e-1,i(s.$slides[t]).clone(!0).attr("id","").attr("data-slick-index",t-s.slideCount).prependTo(s.$slideTrack).addClass("slick-cloned");for(e=0;e<o+s.slideCount;e+=1)t=e,i(s.$slides[t]).clone(!0).attr("id","").attr("data-slick-index",t+s.slideCount).appendTo(s.$slideTrack).addClass("slick-cloned");s.$slideTrack.find(".slick-cloned").find("[id]").each(function(){i(this).attr("id","")})}},e.prototype.interrupt=function(i){var e=this;i||e.autoPlay(),e.interrupted=i},e.prototype.selectHandler=function(e){var t=this,o=i(e.target).is(".slick-slide")?i(e.target):i(e.target).parents(".slick-slide"),s=parseInt(o.attr("data-slick-index"));return s||(s=0),t.slideCount<=t.options.slidesToShow?void t.slideHandler(s,!1,!0):void t.slideHandler(s)},e.prototype.slideHandler=function(i,e,t){var o,s,n,r,l,d=null,a=this;if(e=e||!1,!(a.animating===!0&&a.options.waitForAnimate===!0||a.options.fade===!0&&a.currentSlide===i))return e===!1&&a.asNavFor(i),o=i,d=a.getLeft(o),r=a.getLeft(a.currentSlide),a.currentLeft=null===a.swipeLeft?r:a.swipeLeft,a.options.infinite===!1&&a.options.centerMode===!1&&(i<0||i>a.getDotCount()*a.options.slidesToScroll)?void(a.options.fade===!1&&(o=a.currentSlide,t!==!0&&a.slideCount>a.options.slidesToShow?a.animateSlide(r,function(){a.postSlide(o)}):a.postSlide(o))):a.options.infinite===!1&&a.options.centerMode===!0&&(i<0||i>a.slideCount-a.options.slidesToScroll)?void(a.options.fade===!1&&(o=a.currentSlide,t!==!0&&a.slideCount>a.options.slidesToShow?a.animateSlide(r,function(){a.postSlide(o)}):a.postSlide(o))):(a.options.autoplay&&clearInterval(a.autoPlayTimer),s=o<0?a.slideCount%a.options.slidesToScroll!==0?a.slideCount-a.slideCount%a.options.slidesToScroll:a.slideCount+o:o>=a.slideCount?a.slideCount%a.options.slidesToScroll!==0?0:o-a.slideCount:o,a.animating=!0,a.$slider.trigger("beforeChange",[a,a.currentSlide,s]),n=a.currentSlide,a.currentSlide=s,a.setSlideClasses(a.currentSlide),a.options.asNavFor&&(l=a.getNavTarget(),l=l.slick("getSlick"),l.slideCount<=l.options.slidesToShow&&l.setSlideClasses(a.currentSlide)),a.updateDots(),a.updateArrows(),a.options.fade===!0?(t!==!0?(a.fadeSlideOut(n),a.fadeSlide(s,function(){a.postSlide(s)})):a.postSlide(s),void a.animateHeight()):void(t!==!0&&a.slideCount>a.options.slidesToShow?a.animateSlide(d,function(){a.postSlide(s)}):a.postSlide(s)))},e.prototype.startLoad=function(){var i=this;i.options.arrows===!0&&i.slideCount>i.options.slidesToShow&&(i.$prevArrow.hide(),i.$nextArrow.hide()),i.options.dots===!0&&i.slideCount>i.options.slidesToShow&&i.$dots.hide(),i.$slider.addClass("slick-loading")},e.prototype.swipeDirection=function(){var i,e,t,o,s=this;return i=s.touchObject.startX-s.touchObject.curX,e=s.touchObject.startY-s.touchObject.curY,t=Math.atan2(e,i),o=Math.round(180*t/Math.PI),o<0&&(o=360-Math.abs(o)),o<=45&&o>=0?s.options.rtl===!1?"left":"right":o<=360&&o>=315?s.options.rtl===!1?"left":"right":o>=135&&o<=225?s.options.rtl===!1?"right":"left":s.options.verticalSwiping===!0?o>=35&&o<=135?"down":"up":"vertical"},e.prototype.swipeEnd=function(i){var e,t,o=this;if(o.dragging=!1,o.swiping=!1,o.scrolling)return o.scrolling=!1,!1;if(o.interrupted=!1,o.shouldClick=!(o.touchObject.swipeLength>10),void 0===o.touchObject.curX)return!1;if(o.touchObject.edgeHit===!0&&o.$slider.trigger("edge",[o,o.swipeDirection()]),o.touchObject.swipeLength>=o.touchObject.minSwipe){switch(t=o.swipeDirection()){case"left":case"down":e=o.options.swipeToSlide?o.checkNavigable(o.currentSlide+o.getSlideCount()):o.currentSlide+o.getSlideCount(),o.currentDirection=0;break;case"right":case"up":e=o.options.swipeToSlide?o.checkNavigable(o.currentSlide-o.getSlideCount()):o.currentSlide-o.getSlideCount(),o.currentDirection=1}"vertical"!=t&&(o.slideHandler(e),o.touchObject={},o.$slider.trigger("swipe",[o,t]))}else o.touchObject.startX!==o.touchObject.curX&&(o.slideHandler(o.currentSlide),o.touchObject={})},e.prototype.swipeHandler=function(i){var e=this;if(!(e.options.swipe===!1||"ontouchend"in document&&e.options.swipe===!1||e.options.draggable===!1&&i.type.indexOf("mouse")!==-1))switch(e.touchObject.fingerCount=i.originalEvent&&void 0!==i.originalEvent.touches?i.originalEvent.touches.length:1,e.touchObject.minSwipe=e.listWidth/e.options.touchThreshold,e.options.verticalSwiping===!0&&(e.touchObject.minSwipe=e.listHeight/e.options.touchThreshold),i.data.action){case"start":e.swipeStart(i);break;case"move":e.swipeMove(i);break;case"end":e.swipeEnd(i)}},e.prototype.swipeMove=function(i){var e,t,o,s,n,r,l=this;return n=void 0!==i.originalEvent?i.originalEvent.touches:null,!(!l.dragging||l.scrolling||n&&1!==n.length)&&(e=l.getLeft(l.currentSlide),l.touchObject.curX=void 0!==n?n[0].pageX:i.clientX,l.touchObject.curY=void 0!==n?n[0].pageY:i.clientY,l.touchObject.swipeLength=Math.round(Math.sqrt(Math.pow(l.touchObject.curX-l.touchObject.startX,2))),r=Math.round(Math.sqrt(Math.pow(l.touchObject.curY-l.touchObject.startY,2))),!l.options.verticalSwiping&&!l.swiping&&r>4?(l.scrolling=!0,!1):(l.options.verticalSwiping===!0&&(l.touchObject.swipeLength=r),t=l.swipeDirection(),void 0!==i.originalEvent&&l.touchObject.swipeLength>4&&(l.swiping=!0,i.preventDefault()),s=(l.options.rtl===!1?1:-1)*(l.touchObject.curX>l.touchObject.startX?1:-1),l.options.verticalSwiping===!0&&(s=l.touchObject.curY>l.touchObject.startY?1:-1),o=l.touchObject.swipeLength,l.touchObject.edgeHit=!1,l.options.infinite===!1&&(0===l.currentSlide&&"right"===t||l.currentSlide>=l.getDotCount()&&"left"===t)&&(o=l.touchObject.swipeLength*l.options.edgeFriction,l.touchObject.edgeHit=!0),l.options.vertical===!1?l.swipeLeft=e+o*s:l.swipeLeft=e+o*(l.$list.height()/l.listWidth)*s,l.options.verticalSwiping===!0&&(l.swipeLeft=e+o*s),l.options.fade!==!0&&l.options.touchMove!==!1&&(l.animating===!0?(l.swipeLeft=null,!1):void l.setCSS(l.swipeLeft))))},e.prototype.swipeStart=function(i){var e,t=this;return t.interrupted=!0,1!==t.touchObject.fingerCount||t.slideCount<=t.options.slidesToShow?(t.touchObject={},!1):(void 0!==i.originalEvent&&void 0!==i.originalEvent.touches&&(e=i.originalEvent.touches[0]),t.touchObject.startX=t.touchObject.curX=void 0!==e?e.pageX:i.clientX,t.touchObject.startY=t.touchObject.curY=void 0!==e?e.pageY:i.clientY,void(t.dragging=!0))},e.prototype.unfilterSlides=e.prototype.slickUnfilter=function(){var i=this;null!==i.$slidesCache&&(i.unload(),i.$slideTrack.children(this.options.slide).detach(),i.$slidesCache.appendTo(i.$slideTrack),i.reinit())},e.prototype.unload=function(){var e=this;i(".slick-cloned",e.$slider).remove(),e.$dots&&e.$dots.remove(),e.$prevArrow&&e.htmlExpr.test(e.options.prevArrow)&&e.$prevArrow.remove(),e.$nextArrow&&e.htmlExpr.test(e.options.nextArrow)&&e.$nextArrow.remove(),e.$slides.removeClass("slick-slide slick-active slick-visible slick-current").attr("aria-hidden","true").css("width","")},e.prototype.unslick=function(i){var e=this;e.$slider.trigger("unslick",[e,i]),e.destroy()},e.prototype.updateArrows=function(){var i,e=this;i=Math.floor(e.options.slidesToShow/2),e.options.arrows===!0&&e.slideCount>e.options.slidesToShow&&!e.options.infinite&&(e.$prevArrow.removeClass("slick-disabled").attr("aria-disabled","false"),e.$nextArrow.removeClass("slick-disabled").attr("aria-disabled","false"),0===e.currentSlide?(e.$prevArrow.addClass("slick-disabled").attr("aria-disabled","true"),e.$nextArrow.removeClass("slick-disabled").attr("aria-disabled","false")):e.currentSlide>=e.slideCount-e.options.slidesToShow&&e.options.centerMode===!1?(e.$nextArrow.addClass("slick-disabled").attr("aria-disabled","true"),e.$prevArrow.removeClass("slick-disabled").attr("aria-disabled","false")):e.currentSlide>=e.slideCount-1&&e.options.centerMode===!0&&(e.$nextArrow.addClass("slick-disabled").attr("aria-disabled","true"),e.$prevArrow.removeClass("slick-disabled").attr("aria-disabled","false")))},e.prototype.updateDots=function(){var i=this;null!==i.$dots&&(i.$dots.find("li").removeClass("slick-active").end(),i.$dots.find("li").eq(Math.floor(i.currentSlide/i.options.slidesToScroll)).addClass("slick-active"))},e.prototype.visibility=function(){var i=this;i.options.autoplay&&(document[i.hidden]?i.interrupted=!0:i.interrupted=!1)},i.fn.slick=function(){var i,t,o=this,s=arguments[0],n=Array.prototype.slice.call(arguments,1),r=o.length;for(i=0;i<r;i++)if("object"==typeof s||"undefined"==typeof s?o[i].slick=new e(o[i],s):t=o[i].slick[s].apply(o[i].slick,n),"undefined"!=typeof t)return t;return o}});;
+(function($, Drupal, window, document) {
+
+    Drupal.behaviors.themeSlickConfig = {
+      attach: function(context, settings) {
+        // config
+        var slick_options = {
+            dots: false,
+            arrows: true,
+            infinite: false,
+            speed: 300,
+            slidesToShow: 3,
+            slidesToScroll: 3,
+            prevArrow: '<button type="button" class="slick-prev">Previous</button>',
+            nextArrow: '<button type="button" class="slick-next">Next</button>',
+            responsive: [{
+                breakpoint: 978,
+                settings: {
+                    slidesToShow: 1,
+                    slidesToScroll: 1,
+                    infinite: true,
+                    dots: true,
+                    arrows: false,
+                }
+            }, ]
+        };
+
+        var slick_options_mobile = {
+            dots: true,
+            arrows: false,
+            infinite: true,
+            speed: 300,
+            centerMode: true,
+            slidesToShow: 1,
+            slidesToScroll: 1,
+        };
+
+        var slick_options_mobile_no_center = {
+            dots: true,
+            arrows: false,
+            infinite: true,
+            speed: 300,
+            centerMode: false,
+            slidesToShow: 4,
+            slidesToScroll: 1,
+        };
+
+        // Mobile sliders
+        if ($('body').hasClass('js-mobile')) {
+            $('.component.js-slider-mobile .cog--items, .component.js-slider-mobile .view-content, .component .tabs ul.js-slider-mobile').not('.slick-initialized').slick(slick_options_mobile);
+            $('.component.js-slider-mobile-nc .cog--items').not('.slick-initialized').slick(slick_options_mobile_no_center);
+
+            $('.cp-tabs .js-slider-nondk, .documents_requiered_tabs .js-slider').not('.slick-initialized').slick();
+
+          if ($('body').hasClass('alias--financia-ya')) {
+            $('.cp-tabs.is-shorcut .main-links').not('.slick-initialized').slick({
+              dots: false,
+              slidesToShow: 1,
+              slidesToScroll: 1,
+              arrows: false,
+              infinite: false,
+              touchMove: true,
+              variableWidth: true,
+            });
+          }
+          else {
+            $('.cp-tabs.is-shorcut .main-links').not('.slick-initialized').slick({
+                dots: false,
+                slidesToShow: 1,
+                slidesToScroll: 1,
+                arrows: false,
+                infinite: true,
+                touchMove: true,
+                variableWidth: true,
+            });
+          }
+
+            $('.cp-tabs.is-shorcut .main-links > .slick-list').css('height', '5rem');
+
+            $('.features.js-slider').not('.slick-initialized').slick(slick_options);
+
+            $('.next-arrow').on('click', function() {
+                $('.js-slider').slickNext();
+            });
+            $('.prev-arrow').on('click', function() {
+                $('.js-slider').slickPrev();
+            });
+        }
+
+        $('.component.js-slider .cog--items, .component .view-content.js-slider, .component .tabs ul.js-slider, #block-tabsdocumentosrequeridos .cp-tabs .js-slider')
+            .not('.slick-initialized').slick(slick_options);
+        $('.features.js-slider').not('.slick-initialized').slick(slick_options);
+        $('.next-arrow').on('click', function() {
+            $('.js-slider').slickNext();
+        });
+        $('.prev-arrow').on('click', function() {
+            $('.js-slider').slickPrev();
+        });
+
+        $('.component.component__slider .cog--items').not('.slick-initialized').slick({
+            dots: true,
+            infinite: true,
+            speed: 300,
+            slidesToShow: 1,
+            slidesToScroll: 1,
+            lazyLoad: 'ondemand',
+            adaptiveHeight: true,
+            autoplay: true,
+            autoplaySpeed: 4000
+        });
+
+        $('#tab-0 .grid--carousel .view-content, #tab-2 .grid--carousel .view-content, #tab-3 .grid--carousel .view-content, #tab-4 .grid--carousel .view-content').not('.slick-initialized').slick({
+          infinite: true,
+          speed: 300,
+          slidesToShow: 1,
+          slidesToScroll: 1,
+          dots: true,
+          arrows: false,
+          lazyLoad: 'ondemand',
+          adaptiveHeight: true,
+          autoplay: false,
+          autoplaySpeed: 4000,
+          mobileFirst: true,
+          responsive: [{
+            breakpoint: 767,
+            settings: {
+              slidesToShow: 3,
+              slidesToScroll: 1,
+              arrows: true,
+              dots: false,
+            }
+          }]
+        });
+
+        $('#block-tabsasistencias .cp-tabs .js-slider, .documents_requiered_tabs .js-slider')
+            .not('.slick-initialized').slick();
+
+        $('.component__card-person-list .field__items').slick({
+          infinite: true,
+          speed: 500,
+          slidesToShow: 1,
+          slidesToScroll: 1,
+          dots: true,
+          adaptiveHeight: true,
+          autoplay: true,
+          autoplaySpeed: 4000,
+          mobileFirst: true,
+          responsive: [{
+            breakpoint: 767,
+            settings: "unslick"
+          }]
+        });
+      }
+    }
+}(jQuery, Drupal, this, this.document));
+;
+(function ($, Drupal, window, document) {
+    'use strict';
+
+    Drupal.behaviors.themeAccordionConfig = {
+        attach: function (context, settings) {
+
+            // if is mobile
+            if ($('body').hasClass('js-mobile') || $('body').hasClass('alias--cotiza-en-linea-cotizador-autos') || $("body").find(".accordion--block").length > 0) {
+                var accordion = $('.js-accordion');
+
+                accordion.parent('div').not('section').addClass('js-accordion-row');
+                accordion.removeClass('desplegado');
+                accordion.next('.js-accordion-options').css("height", 0).css('overflow', 'hidden');
+
+                if (accordion.find('.icon-arrow').length === 0) {
+                    accordion.append('<span class="icon-arrow"></span>');
+                }
+
+                $('body').off().on('click', '.js-accordion', function () {
+                    var acc = $(this),
+                        alto = 0,
+                        el;
+
+                    if (acc.hasClass('desplegado')) {
+                        acc.removeClass('desplegado');
+                        acc.next('.js-accordion-options').css("height", 0).css('overflow', 'hidden');
+                    } else {
+                        acc.next('.js-accordion-options').children('section, div').not('.cog--flex, .component__content, .cog--mq').each(function (i, e) {
+                            el = $(e);
+                            alto = alto + el.height() + 25;
+                        });
+
+                        acc.addClass('desplegado');
+                        acc.next('.js-accordion-options').css("height", 'auto');
+
+                        $('.js-accordion').not(acc).removeClass('desplegado');
+                        $('.js-accordion').not(acc).next('.js-accordion-options').css("height", 0).css('overflow', 'hidden');
+                    }
+                });
+            }
+
+            // $('.js-accordion').next('.js-accordion-options').css("height", '100%').css('overflow', 'show');
+        }
+    }
+
+    const accordions = Array.from(document.querySelectorAll('.accordion-ls'))
+
+    accordions.forEach(accordion => {
+      const accordionHeader = accordion.querySelector('.accordion-ls__header')
+
+      accordionHeader.addEventListener('click', event => {
+        accordion.classList.toggle('is-open')
+      })
+    })
+}(jQuery, Drupal, this, this.document));
+;
+(function ($, Drupal, window, document) {
+  'use strict';
+
+  Drupal.behaviors.themeFormsJS = {
+    attach: function (context, settings) {
+
+      // reload window
+      var reload_document = (function(time) {
+        window.setTimeout(function () { document.location.reload(true); }, time);
+      });
+
+      $('.webform-section-wrapper').find('input').on('input', function (e) {
+        $(e.currentTarget).attr('data-empty', !e.currentTarget.value);
+      });
+
+      // Mobile
+      if ($('body').hasClass('js-mobile')) {
+        if ($('body').find('.webform-confirmation').length > 0) {
+          reload_document(3500);
+        }
+      }
+
+      $(".form-text, .form-email, .form-number, .form-select, .form-item textarea, .form-item .select--tabs").each(function () {
+        var el = $(this), item = el.parents('.form-item');
+        if (el.parents('form').prop('autocomplete') !== 'off') {
+          el.parents('form').prop('autocomplete', 'off');
+        }
+        el.prop('autocomplete', 'off');
+
+        // if IE 11 add class to labels
+        if (!!navigator.userAgent.match(/Trident.*rv\:11\./) && el.hasClass('form-select')) {
+          item.addClass('form__input--activo');
+          el.focus().trigger('click');
+        } else {
+
+          if (el.attr('autofocus') !== undefined) {
+            setTimeout(function() {
+              el.focus();
+            }, 50);
+          }
+
+          el.on('focus', function () {
+            item.addClass('form__input--activo');
+          })
+          .on('blur', function () {
+            var valorBucar = el.val().length;
+            if (valorBucar === 0) {
+              item.removeClass('form__input--activo');
+            }
+          });
+        }
+      });
+
+      $( ".webform-submission-form .messages--error" ).remove();
+
+      $('.component__single-text--interesado .component__content .single_text_class p a').click(function (e) {
+        e.preventDefault();
+        $('.form-interesado').removeClass('is-hidden');
+        $("body").addClass("no-scroll");
+      })
+
+      // Detail product
+      // Show webform
+      // $('body.nodetype--product .component__single-text--interesado p a').click(function(e){
+      //   e.preventDefault();
+      //   $('.form-interesado').removeClass('is-hidden');
+      //   $("body").addClass("no-scroll");
+      // });
+      // Hide webform
+      $('.form-interesado .form-confirmation, .form-interesado').on('click', '#close', function(e) {
+        e.preventDefault();
+        $('.form-interesado').addClass('is-hidden');
+        $("body").removeClass("no-scroll");
+      });
+
+      $('.glosario-ls__link').click(function (e) {
+        e.preventDefault();
+        $('.form-glossary-word').addClass('is-open');
+        // $("body").addClass("no-scroll");
+      });
+
+      $('.jsModalClose').click(function (e) {
+        e.preventDefault();
+        $('.form-glossary-word').removeClass('is-open');
+        // $("body").addClass("no-scroll");
+      });
+
+      // video modal component.
+      $('.video__link').click(function (e) {
+        e.preventDefault();
+        var src_iframe = $(this).attr('data-atr');
+        $('.videoModalOverlay iframe').attr('src', src_iframe);
+        $('.videoModalOverlay').addClass('is-open');
+      });
+
+
+      $('.videoModalClose').click(function (e) {
+        e.preventDefault();
+        $(this).closest('.videoModalOverlay').removeClass('is-open');
+        // $("body").addClass("no-scroll");
+      });
+
+
+
+
+      //--------------------
+      // PQR
+      //--------------------
+
+      // Pqr form - Add url action
+      /*if ($('body').hasClass('alias--zona-de-cliente-contactanos')) {
+        if ($(".salesforce-form-pqr").length > 0) {
+          var url_action = 'https://webto.salesforce.com/servlet/servlet.WebToCase?encoding=UTF-8';
+          $(".salesforce-form-pqr").attr('action', url_action);
+        }
+      }*/
+
+      if ($(".webform-submission-pqr-form").length > 0) {
+
+        // --------------------------
+        // PQRS - FIELDS IDS SALEFORCE VALIDATION
+        // --------------------------
+        // Pqr field states
+        /*if ($("#00NG000000FWyn9").val() != 'SI') {
+          $("#00N4A00000FkiKp").attr("disabled", 'disabled');
+        }
+        $("#00NG000000FWyn9").change(function(){
+          if ($(this).val() != 'SI') {
+            $("#00N4A00000FkiKp").attr("disabled", 'disabled');
+          }
+          else {
+            $("#00N4A00000FkiKp").removeAttr('disabled');
+          }
+        })
+
+        if ($("#00N4A00000FkiL2").val() != 'AUTOS' || $("#00N4A00000FkiL2").val() != 'SOAT') {
+          $("#00NG000000998UR").attr("disabled", 'disabled');
+        }
+        $("#00N4A00000FkiL2").change(function(){
+          if ($(this).val() == 'AUTOS' || $(this).val() == 'SOAT') {
+            $("#00NG000000998UR").removeAttr('disabled');
+          }
+          else {
+            $("#00NG000000998UR").attr("disabled", 'disabled');
+          }
+        })
+
+        // Pqr Implement Jquery validate
+        var form = $(".salesforce-form-pqr");
+        var validate_rules = {
+          // Reconsideracion
+          '00NG000000FWyn9': {
+            required: true,
+          },
+          // Número de caso
+          '00N4A00000FkiKp': {
+            required: $("#00N4A00000FkiKp").val() != 'SI',
+          },
+          // Tipo identificacion
+          '00NG000000FWyoW': {
+            required: true,
+          },
+          // Número identificacion
+          '00NG000000FWyoI': {
+            required: true,
+            number: true,
+          },
+          // Nombres y apellidos
+          '00N4A00000FkiKo': {
+            required: true,
+          },
+          // Ciudades
+          '00NG000000FWynf': {
+            required: true,
+          },
+          // Direccion
+          '00NG000000FWynx': {
+            required: true,
+          },
+          // Celular
+          '00NG000000FWynB': {
+            required: true,
+          },
+          // Correo
+          '00NG000000FWynb': {
+            required: true,
+            isValidEmailAddress: true,
+          },
+          // Producto
+          '00N4A00000FkiL2': {
+            required: true,
+          },
+          // Medio de envio
+          '00NG000000FWynl': {
+            required: true,
+          },
+          // Placa
+          '00NG000000998UR': {
+            required: true,
+          },
+          // Descripcion
+          'descripcion': {
+            required: true,
+          },
+        };
+
+        var validate_messages = {
+          // Reconsideracion
+          '00NG000000FWyn9': {
+            required: 'Este campo es requerido',
+          },
+          // Número de caso
+          '00N4A00000FkiKp': {
+            required: 'Este campo es requerido',
+          },
+          // Tipo identificacion
+          '00NG000000FWyoW': {
+            required: 'Este campo es requerido',
+          },
+          // Número identificacion
+          '00NG000000FWyoI': {
+            required: 'Este campo es requerido',
+            number: 'Debe ingresar solo números',
+          },
+          // Nombres y apellidos
+          '00N4A00000FkiKo': {
+            required: 'Este campo es requerido',
+          },
+          // Ciudades
+          '00NG000000FWynf': {
+            required: 'Este campo es requerido',
+          },
+          // Direccion
+          '00NG000000FWynx': {
+            required: 'Este campo es requerido',
+          },
+          // Celular
+          '00NG000000FWynB': {
+            required: 'Este campo es requerido',
+          },
+          // Correo
+          '00NG000000FWynb': {
+            required: 'Este campo es requerido',
+            isValidEmailAddress: 'Correo electrónico no valido',
+          },
+          // Producto
+          '00N4A00000FkiL2': {
+            required: 'Este campo es requerido',
+          },
+          // Medio de envio
+          '00NG000000FWynl': {
+            required: 'Este campo es requerido',
+          },
+          // Placa
+          '00NG000000998UR': {
+            required: 'Este campo es requerido',
+          },
+          // Descripcion
+          'descripcion': {
+            required: 'Este campo es requerido',
+          },
+        };
+        form.validate({
+          rules: validate_rules,
+          messages: validate_messages,
+        });
+        $.validator.addMethod("isValidEmailAddress",
+          function(value, element) {
+            var pattern = new RegExp(/^([\w-\.]+@([\w-]+\.)+[\w-]{2,4})?$/);
+            return pattern.test(value);
+          }
+        );*/
+
+
+
+        // --------------------------
+        // PQRS FIELDS NAMES VALIDATION
+        // --------------------------
+        // Pqr field states
+
+        //if ($("#edit-reconsideracion").val() != 'SI') {
+          $("#edit-numero-caso").attr("disabled", 'disabled');
+        //}
+        $("#edit-reconsideracion").change(function(){
+          if ($(this).val() != 'SI') {
+            $("#edit-numero-caso").attr("disabled", 'disabled');
+          }
+          else {
+            $("#edit-numero-caso").removeAttr('disabled');
+          }
+        })
+        //if ($("#edit-producto--2").val() != 'AUTOS' || $("#edit-producto--2").val() != 'SOAT') {
+          $("#edit-placa").attr("disabled", 'disabled');
+        //}
+        $("#edit-producto--2").change(function(){
+          if ($(this).val() == 'AUTOS' || $(this).val() == 'SOAT') {
+            $("#edit-placa").removeAttr('disabled');
+          }
+          else {
+            $("#edit-placa").attr("disabled", 'disabled');
+          }
+        })
+
+
+        var form = $(".webform-submission-pqr-form"),
+            msg_confirm = form.children('.webform-confirmation');
+
+        // Pqr show confirmation message
+        if (msg_confirm.length > 0) {
+          var ht_tab_pqr = $('.alias--zona-de-cliente-contactanos .cp-tabs .ui-tabs-nav li:nth-child(2)');
+          if (ht_tab_pqr.length > 0) {
+            ht_tab_pqr.find('.cta a').click();
+            let hb = $('.cp-banner__image').height(),
+                hct = $('.component__tabs .component__heading').height(),
+                scrllForm = 600;
+            if (hb && hct) {
+              scrllForm = parseInt(hb) + parseInt(hct);
+            }
+            $('html, body').animate( { scrollTop : scrllForm }, 900);
+          }
+        }
+
+        // Pqr Implement Jquery validate
+        var validate_rules = {
+          // Reconsideracion
+          'reconsideracion': {
+            required: true,
+          },
+          // Número de caso
+          'numero_caso': {
+            required: $("#edit-numero-caso").val() != 'SI',
+          },
+          // Tipo identificacion
+          'tipo_de_identificacion': {
+            required: true,
+          },
+          // Número identificacion
+          'numero_de_identificacion': {
+            required: true,
+            number: true,
+          },
+          // Nombres y apellidos
+          'nombres_y_apellidos_razon_social_': {
+            required: true,
+          },
+          // Ciudades
+          'ciudad': {
+            required: true,
+          },
+          // Direccion
+          'direccion_si': {
+            required: true,
+          },
+          // Celular
+          'celular_contacto': {
+            required: true,
+          },
+          // Correo
+          'correo_electronico': {
+            required: true,
+            isValidEmailAddress: true,
+          },
+          // Producto
+          'producto': {
+            required: true,
+          },
+          // Medio de envio
+          'medio_envio': {
+            required: true,
+          },
+          // Placa
+          'placa': {
+            required: true,
+          },
+          // Descripcion
+          'descripcion': {
+            required: true,
+          },
+        };
+
+        var validate_messages = {
+          // Reconsideracion
+          'reconsideracion': {
+            required: 'Este campo es requerido',
+          },
+          // Número de caso
+          'numero_caso': {
+            required: 'Este campo es requerido',
+          },
+          // Tipo identificacion
+          'tipo_de_identificacion': {
+            required: 'Este campo es requerido',
+          },
+          // Número identificacion
+          'numero_de_identificacion': {
+            required: 'Este campo es requerido',
+            number: 'Debe ingresar solo números',
+          },
+          // Nombres y apellidos
+          'nombres_y_apellidos_razon_social_': {
+            required: 'Este campo es requerido',
+          },
+          // Ciudades
+          'ciudad': {
+            required: 'Este campo es requerido',
+          },
+          // Direccion
+          'direccion_si': {
+            required: 'Este campo es requerido',
+          },
+          // Celular
+          'celular_contacto': {
+            required: 'Este campo es requerido',
+          },
+          // Correo
+          'correo_electronico': {
+            required: 'Este campo es requerido',
+            isValidEmailAddress: 'Correo electrónico no valido',
+          },
+          // Producto
+          'producto': {
+            required: 'Este campo es requerido',
+          },
+          // Medio de envio
+          'medio_envio': {
+            required: 'Este campo es requerido',
+          },
+          // Placa
+          'placa': {
+            required: 'Este campo es requerido',
+          },
+          // Descripcion
+          'descripcion': {
+            required: 'Este campo es requerido',
+          },
+        };
+        form.validate({
+          rules: validate_rules,
+          messages: validate_messages,
+        });
+        $.validator.addMethod("isValidEmailAddress",
+          function(value, element) {
+            var pattern = new RegExp(/^([\w-\.]+@([\w-]+\.)+[\w-]{2,4})?$/);
+            return pattern.test(value);
+          }
+        );
+
+        // Redirect to page after submit
+        /*form.on('submit', function(e) {
+          e.preventDefault();
+          if (form.find('.error').length === 0) {
+            let dataForm = form.serialize(),
+              url = form.attr('action');
+            $.post(url, dataForm)
+            .always(function() {
+              document.location.replace("/agradecimiento");
+            });
+          }
+        });*/
+      }
+
+
+
+
+      // Message webform ajax inline
+      $('.js-form-errors-inline .form-submit').click(function(){
+        $(document).ajaxComplete(function() {
+          $('.js-form-errors-inline .error').each(function() {
+            var el = $(this),
+              msn_error = el.attr('data-webform-required-error'),
+              parent = el.parents('.form-item');
+            if (el.hasClass('js-field-errors-inline')) {
+              parent.find('.element-msn-error').remove();
+              if (typeof msn_error !== typeof undefined && msn_error !== false) {
+                parent.append('<span class="element-msn-error">'+ msn_error +'</span>');
+              }
+            }
+          });
+          // reload page on confirmation
+          if ($('body').find('.webform-confirmation').length > 0) {
+            reload_document(6500);
+          }
+        })
+      });
+    }
+  }
+}) (jQuery, Drupal, this, this.document);
+;
+(function ($, Drupal, window, document) {
+  'use strict';
+
+  // Example of Drupal behavior loaded.
+  Drupal.behaviors.themeChatJS = {
+    attach: function (context, settings) {
+
+      // var chatSettings = {
+      //   header_text: 'Web Chat',
+      //   header_status: 'En linea',
+      //   login_text: 'Comenzar',
+      //   welcome_text: '¡Hola!',
+      //   subtitle_text: 'Ingresa la siguiente información y cuéntanos en qué te podemos ayudar',
+      //   message_placeholder: 'Escriba un mensaje...',
+      //   login_fields: ['Nombre', 'Email'],
+      //   send_color: '#cb1e74',
+      //   header_background_color: '#FFFFFF',
+      //   header_font_color: '#FFFFFF',
+      //   locale: 'es',
+      //   name_field: 'Nombre',
+      //   button_login_color: 'white',
+      //   button_login_bg: 'rgb(223, 141, 51)',
+      //   field_font_color: '#525252',
+      //   welcome_color: '#525252',
+      //   subtitle_color: '#525252',
+      //   preserve_history: false,
+      //   bg_menu: '#1f1f1f',
+      //   geo_active: true,
+      // };
+
+      // var startChat = function () {
+      //   var chat = new Webchat("962b7ae3c4765c4a8cc9c47ccb91c49b20fb", chatSettings);
+      //   chat.init();
+      //   chat.expandChat();
+      // };
+
+      // $('.tb-megamenu-menu-con .tb-megamenu-item .tb-megamenu-item a').on('click', function(e) {
+      //   if ($(this).parents('.tb-megamenu-item').data('label') === 'Chat') {
+      //     e.preventDefault();
+      //     startChat();
+      //   }
+      // });
+
+$('.closeButton').click(function(e){
+       if ($('.embeddedServiceSidebarHeader').not('noAnimate')) {
+          alert('va');
+        }
+});
+      $('#block-buscasayuda ul.menu li a.chat').click(function(e){
+        e.preventDefault();
+        $(this).parent("li").addClass('is-hidden');
+        $('#blocks-necesecitas-ayuda .menu').addClass('is-hidden');
+        $('#show-menu-help').removeClass('active');
+        $('.helpButton').removeClass('d-none');
+        $('.helpButton').css("display","block");
+
+
+       
+        // $('#block-buscasayuda ul.menu').addClass('is-hidden');
+        // $('#block-buscasayuda #show-menu-help').removeClass('active');
+        // $('.overlay-buscayuda').remove();
+        // if ($('#webchat-widget-container').length > 0) {
+        //   $('#block-buscasayuda #show-menu-help #show-menu-help').click();
+        // }
+        // else {
+        //   startChat();
+        // }
+
+      });
+    }
+  };
+}) (jQuery, Drupal, this, this.document);
+;
+;(function ($, Drupal, window, document) {
+  'use strict'
+
+  // Example of Drupal behavior loaded.
+  Drupal.behaviors.themeNavJS = {
+    attach: function (context, settings) {
+      $(function () {
+        if ($('body').hasClass('js-mobile')) {
+          $('.links_cotizadores')
+            .parent('li')
+            .find('a')
+            .not('.internal, .nav-submb__link')
+            .attr('target', '_blank')
+        }
+      })
+
+      $('#navigation-mb .nav__mb, #block-menufooter .nav__mb').on(
+        'click',
+        function () {
+          var nav = $(this)
+          if (nav.siblings('ul').hasClass('desplegado')) {
+            nav.siblings('ul').css('height', 0)
+            nav.siblings('ul').removeClass('desplegado')
+            nav.removeClass('nav__mb--open')
+          } else {
+            var alto = nav.siblings('ul').children('li').height(),
+              hijos = nav.siblings('ul').children('li').length,
+              altoTotal = alto * hijos
+            nav.siblings('ul').addClass('desplegado')
+            nav.siblings('ul').css('height', altoTotal)
+            nav.addClass('nav__mb--open')
+          }
+        },
+      )
+
+      $('.item-erramienta--mb').click(function () {
+        var nav = $('#navegacion')
+        if (nav.hasClass('is-visible')) {
+          nav.removeClass('is-visible')
+        } else {
+          nav.addClass('is-visible')
+        }
+      })
+
+      $('#burguer-menu').click(function () {
+        $('body').addClass('abierto no-scroll')
+      })
+
+      $('#close-mb').click(function () {
+        $('body').removeClass('abierto no-scroll')
+      })
+
+      if ($('body').hasClass('js-mobile')) {
+        $('.nav-contact, .nav__mb').removeAttr('href').css('cursor', 'pointer')
+      }
+
+      $('.nav-contact').on('click', function () {
+        var el = $(this),
+          cont = $('.mb__info-cont')
+
+        if (cont.hasClass('is-visible')) {
+          cont.removeClass('is-visible')
+          el.removeClass('nav-herramientas__link--active')
+        } else {
+          cont.addClass('is-visible')
+          el.addClass('nav-herramientas__link--active')
+        }
+      })
+
+      // Componente cuentanos de ti
+      $('.component__select-cta .component__content button').click(function () {
+        var value = $(
+          '.component__select-cta .component__content .select-cta',
+        ).val()
+        if (value != '' && value != 0) {
+          window.location.href = value
+        }
+      })
+
+      if (window.location.hash) {
+        let id_tab = window.location.hash.substr(5, 1)
+        $('.cp-tabs:visible')
+          .find('a[href="#tab-' + id_tab + '"]')
+          .click()
+      }
+
+      function PopupCenter(url, title, w, h) {
+        // Fixes dual-screen position                         Most browsers      Firefox
+        var dualScreenLeft =
+            window.screenLeft != undefined ? window.screenLeft : window.screenX,
+          dualScreenTop =
+            window.screenTop != undefined ? window.screenTop : window.screenY,
+          width = window.innerWidth
+            ? window.innerWidth
+            : document.documentElement.clientWidth
+            ? document.documentElement.clientWidth
+            : screen.width,
+          height = window.innerHeight
+            ? window.innerHeight
+            : document.documentElement.clientHeight
+            ? document.documentElement.clientHeight
+            : screen.height,
+          systemZoom = width / window.screen.availWidth,
+          left = (width - w) / 2 / systemZoom + dualScreenLeft,
+          top = (height - h) / 2 / systemZoom + dualScreenTop,
+          newWindow = window.open(
+            url,
+            title,
+            'scrollbars=yes, width=' +
+              w / systemZoom +
+              ', height=' +
+              h / systemZoom +
+              ', top=' +
+              top +
+              ', left=' +
+              left,
+          )
+
+        // Puts focus on the newWindow
+        if (window.focus) newWindow.focus()
+        window.resizing = false
+        newWindow.resizing = false
+      }
+
+      // Cotizadores
+      $('.links_cotizadores a')
+        .not('.internal')
+        .on('click', function (e) {
+          e.preventDefault()
+          PopupCenter($(this).attr('href'), $(this).text(), '600', '800'),
+            $(this).attr('resizable', 'no')
+        })
+
+      // Noticias
+      $('body.alias--noticias .view-display-id-block_news .view-content')
+        .find('.views-row')
+        .each(function () {
+          let row = $(this),
+            card = row.find('.item-noti'),
+            link = card.find('.item-noti__cta a').attr('href')
+
+          card.wrap('<a  href="' + link + '"></a>')
+        })
+    },
+  }
+})(jQuery, Drupal, this, this.document)
+;
+/**
+ * @file
+ * Suscriptor file.
+ */
+
+;(function ($, Drupal) {
+  'use strict'
+  Drupal.behaviors.lib_rm = {
+    attach: function (context) {
+      // Init functions
+      var form = $('form#search-medical-network-form .wrapper-form-search'),
+        args = null
+
+      // Default values specilities
+      var val_h_city = form.find('.h-city-rm').val(),
+        val_plan_type = form.find('input[name="plan_type"]:checked').val(),
+        val_h_speciality = form.find('.h-specialty-rm').val(),
+        btn_form_submit = form.find('.form-submit')
+
+      if (
+        val_h_city.length > 0 &&
+        val_plan_type.length > 0 &&
+        val_h_speciality.length > 0
+      ) {
+        specialty_select(val_plan_type, val_h_city, val_h_speciality)
+      }
+
+      function sizeBackground() {
+        if ($('body').hasClass('js-mobile')) {
+          setTimeout(function () {
+            if (
+              !$('#search-medical-network-form .wrapper-form-search').hasClass(
+                'is-fixed',
+              )
+            ) {
+              $('#search-medical-network-form .wrapper-form-search').css(
+                'height',
+                '101%',
+              )
+            }
+          }, 10)
+
+          if (Math.abs(screen.height - $(window).height()) > 100) {
+            $('#search-medical-network-form .wrapper-form-search').css(
+              'height',
+              '101%',
+            )
+          } else {
+            $('#search-medical-network-form .wrapper-form-search').css(
+              'height',
+              '100vh',
+            )
+          }
+        }
+      }
+      $(window).resize(sizeBackground)
+      sizeBackground()
+
+      $("#edit-plan-type input[name='plan_type']")
+        .change(function () {
+          $('#search-medical-network-form .city-rm').removeAttr('disabled')
+          if ($('body').hasClass('js-mobile')) {
+            $(
+              '#search-medical-network-form .wrapper-form-search #edit-plan-type .form-item',
+            ).addClass('is-desktop')
+            $(this).parent().removeClass('is-desktop')
+            $('#search-medical-network-form')
+              .find('#gp_form, .ctn-footer')
+              .each(function () {
+                $(this).removeClass('is-hidden')
+              })
+            if (
+              $('#search-medical-network-form').find('.close-filter').length ===
+              0
+            ) {
+              $(
+                '#search-medical-network-form .wrapper-form-search #edit-plan-type',
+              ).prepend('<a  class="close-filter" cdata="show">Atrás</a>')
+            }
+            var pt = findGetParameter('pt')
+            if (pt == null) {
+              $(
+                '#search-medical-network-form .wrapper-form-search .close-filter',
+              ).addClass('primera-vez')
+            }
+            $(
+              '#search-medical-network-form .wrapper-form-search .close-filter',
+            ).click(function (event) {
+              event.preventDefault()
+              if ($(this).hasClass('primera-vez')) {
+                $(
+                  '#search-medical-network-form .wrapper-form-search #edit-plan-type .form-item',
+                ).removeClass('is-desktop')
+                $(
+                  '#search-medical-network-form .wrapper-form-search .close-filter',
+                ).remove()
+                $(
+                  '#search-medical-network-form .wrapper-form-search #gp_form',
+                ).addClass('is-desktop')
+                $(
+                  '#search-medical-network-form .wrapper-form-search .ctn-footer',
+                ).addClass('is-desktop')
+                $(
+                  '#search-medical-network-form .wrapper-form-search',
+                ).removeClass('is-fixed transform-media transform-up')
+              } else {
+                var action = $(this).attr('cdata')
+                if (action == 'show') {
+                  $(
+                    '#search-medical-network-form .wrapper-form-search',
+                  ).removeClass('transform-up')
+                  $(
+                    '#search-medical-network-form .wrapper-form-search',
+                  ).addClass('transform-media')
+                  $(this).text('Ocultar filtros')
+                  $(this).attr('cdata', 'hide')
+                  $(
+                    '#search-medical-network-form .wrapper-form-search .content-fields-rm',
+                  ).show()
+                  $(
+                    '#search-medical-network-form .wrapper-form-search .ctn-footer',
+                  ).show()
+                }
+
+                if (action == 'hide') {
+                  $(
+                    '#search-medical-network-form .wrapper-form-search',
+                  ).addClass('transform-up')
+                  $(
+                    '#search-medical-network-form .wrapper-form-search',
+                  ).removeClass('transform-media')
+                  $(this).text('Mostrar filtros')
+                  $(this).attr('cdata', 'show')
+                  $(
+                    '#search-medical-network-form .wrapper-form-search .content-fields-rm',
+                  ).hide()
+                  $(
+                    '#search-medical-network-form .wrapper-form-search .content-fields-rm',
+                  ).hide()
+                  $(
+                    '#search-medical-network-form .wrapper-form-search .ctn-footer',
+                  ).hide()
+                }
+              }
+            })
+
+            $(
+              '#search-medical-network-form .wrapper-form-search #gp_form',
+            ).removeClass('is-desktop')
+            $(
+              '#search-medical-network-form .wrapper-form-search .ctn-footer',
+            ).removeClass('is-desktop')
+            $('#search-medical-network-form .wrapper-form-search').addClass(
+              'is-fixed transform-media',
+            )
+            $('#search-medical-network-form .wrapper-form-search').removeClass(
+              'transform-up',
+            )
+          }
+        })
+        .click(function () {
+          var tipopl = $(this).val()
+          if (tipopl.length > 0) {
+            $(this).trigger('change')
+          }
+        })
+
+      // Get geolocation
+      if (navigator.geolocation) {
+        var lat, lng
+        if (typeof Storage !== undefined) {
+          if (localStorage.getItem('long') !== null) {
+            lng = localStorage.getItem('long')
+            lat = localStorage.getItem('lat')
+          }
+        }
+        var data_browser = $('html').attr('data-browser')
+        const reg_browser = new RegExp('Trident')
+
+        // Explorer internet
+        if (reg_browser.test(data_browser)) {
+          var options = {
+            enableHighAccuracy: false,
+          }
+
+          navigator.geolocation.getCurrentPosition(
+            addAttrPositionFields,
+            function (err) {
+              $('.ctn-footer').insertBefore(
+                '<p class="geolocation-not-support">Este navegador no soporta Geolocalizaci\xF3n</p>',
+              )
+              return false
+            },
+            options,
+          )
+
+          if (lat === null && lng === null) {
+            lat = findGetParameter('lat')
+            lng = findGetParameter('lng')
+          }
+          if ($.isNumeric(lat) && $.isNumeric(lng)) {
+            form.find('.h-lat').attr('data-lat', lat)
+            form.find('.h-long').attr('data-long', lng)
+          }
+        }
+        // Others
+        else {
+          navigator.geolocation.getCurrentPosition(addAttrPositionFields)
+        }
+      } else {
+        $('.ctn-footer').insertBefore(
+          '<p class="geolocation-not-support">Este navegador no soporta Geolocalizaci\xF3n</p>',
+        )
+      }
+
+      $('.city-rm')
+        .on('focus', function () {
+          $(this).val('')
+          $('.speciality-rm-sr, .search-word-rm').val('')
+        })
+        .on('keyup', function () {
+          cities_autocomplete()
+        })
+
+      $('.speciality-rm-sr')
+        .on('focus', function () {
+          $(this).val('')
+        })
+        .on('keyup', function () {
+          speciality_autocomplete()
+        })
+
+      add_value_hidden_of_select_specialties()
+      execute_word_autocomplete()
+
+      // Check attribute disable submit button
+      btn_form_submit.attr('disabled', 'disabled')
+      if (btn_form_submit.hasClass('vals-dflt')) {
+        btn_form_submit.removeAttr('disabled')
+      }
+
+      // Check fields in submit
+      $('input[name="around_me"]').click(function (e) {
+        var wrapper = $(this).parents('.wrapper-form-search')
+        assignPositionFields(wrapper)
+      })
+
+      // Filters used
+      // if ($('ul.special-filters .item-filter').length > 0) {
+      //    $('ul.special-filters .item-filter .link-filter').on('click', function(e){
+      // 		e.preventDefault();
+      // 		var current_url = window.location.href,
+      // 		  url = current_url.substring(0, current_url.length - 1),
+      // 		  removeKey = $(this).attr('cdata'),
+      // 		  new_url = removeParamUrl(removeKey, url);
+      // 		if (removeKey == 'c') {
+      // 			new_url = removeParamUrl('e', new_url);
+      // 		}
+      // 		if (new_url.length > 0) {
+      // 			window.location.replace(new_url);
+      // 		}
+      // 	})
+      // }
+      //
+
+      // Click view mode results
+      if (
+        $('.block-render-view-search-medical-network .view-search-rm').length >
+        0
+      ) {
+        var form_view = $(
+          '.block-render-view-search-medical-network .view-search-rm',
+        )
+        var vm = findGetParameter('vm')
+        form_view
+          .children('.view-header')
+          .find('.options-results-rm li.' + vm)
+          .addClass('active')
+        form_view
+          .children('.view-header')
+          .find('.options-results-rm li.vm a')
+          .click(function (e) {
+            e.preventDefault()
+            var form = $(this)
+              .parents('.component__view--render-search-map')
+              .prev()
+              .find('.wrapper-form-search')
+            form.find('.h-view_mode_results').val($(this).attr('cdata-type'))
+            assignPositionFields(form)
+            form.find('.form-submit').click()
+          })
+      }
+
+      // Uncheck and hide on mobile
+      if ($('body').hasClass('js-mobile')) {
+        var search_form = $('#search-medical-network-form')
+        search_form.find('.form-radio:checked').removeAttr('checked')
+        //search_form.find('.js-form-wrapper, .ctn-footer').hide();
+        search_form.find('.form-radio').on('change', function () {
+          search_form.find('.js-form-wrapper, .ctn-footer').show()
+        })
+        var pt = findGetParameter('pt')
+        if (pt !== null) {
+          $('#component-371').before('<div id="ancla-resultados"></div>')
+          $(
+            '#search-medical-network-form .wrapper-form-search #edit-plan-type .form-item',
+          ).addClass('is-desktop')
+          if (
+            $('#search-medical-network-form').find('.close-filter').length === 0
+          ) {
+            $(
+              '#search-medical-network-form .wrapper-form-search #edit-plan-type',
+            ).prepend(
+              '<a  class="close-filter" cdata="show">Mostrar filtros</a>',
+            )
+          }
+          $(
+            '#search-medical-network-form .wrapper-form-search .close-filter',
+          ).click(function (event) {
+            event.preventDefault()
+            if ($(this).hasClass('primera-vez')) {
+              $(
+                '#search-medical-network-form .wrapper-form-search .close-filter',
+              ).remove()
+              $(
+                '#search-medical-network-form .wrapper-form-search #edit-plan-type .form-item',
+              ).removeClass('is-desktop')
+              $(
+                '#search-medical-network-form .wrapper-form-search #gp_form',
+              ).addClass('is-desktop')
+              $(
+                '#search-medical-network-form .wrapper-form-search .ctn-footer',
+              ).addClass('is-desktop')
+              $(
+                '#search-medical-network-form .wrapper-form-search',
+              ).removeClass('is-fixed transform-media transform-up')
+            } else {
+              var action = $(this).attr('cdata')
+              if (action == 'show') {
+                $(this).text('Ocultar filtros')
+                $(this).attr('cdata', 'hide')
+                $(
+                  '#search-medical-network-form .wrapper-form-search #gp_form',
+                ).removeClass('is-desktop')
+                $(
+                  '#search-medical-network-form .wrapper-form-search .ctn-footer',
+                ).removeClass('is-desktop')
+                $('#search-medical-network-form .wrapper-form-search').addClass(
+                  'transform-media',
+                )
+                $(
+                  '#search-medical-network-form .wrapper-form-search',
+                ).removeClass('transform-up')
+              }
+              if (action == 'hide') {
+                $(this).text('Mostrar filtros')
+                $(this).attr('cdata', 'show')
+                $(
+                  '#search-medical-network-form .wrapper-form-search #gp_form',
+                ).addClass('is-desktop')
+                $(
+                  '#search-medical-network-form .wrapper-form-search .ctn-footer',
+                ).addClass('is-desktop')
+                $(
+                  '#search-medical-network-form .wrapper-form-search',
+                ).removeClass('transform-media')
+                $('#search-medical-network-form .wrapper-form-search').addClass(
+                  'transform-up',
+                )
+              }
+            }
+          })
+          $('#search-medical-network-form .wrapper-form-search').addClass(
+            'is-fixed transform-up',
+          )
+          $('#block-renderviewsearchmedicalnetwork').append(
+            '<div class="actions--footer"><a  href="/zona-cliente/red-medica#block-searchmedicalnetwork" class="button button--primary" id="nueva-busqueda">Nueva busqueda</a><a  href="/zona-cliente/red-medica#block-searchmedicalnetwork" id="cancelar">Cancelar</a><div>',
+          )
+          window.scrollTo(0, $('#special-filters').offset().top - 230)
+          search_form.find('#is_mobile').val(1)
+        }
+      }
+
+      if (findGetParameter('c') > 0) {
+        form.find('.city-rm').parent('div').addClass('form__input--activo')
+      }
+      if (findGetParameter('e') > 0) {
+        form
+          .find('.speciality-rm-sr')
+          .parent('div')
+          .addClass('form__input--activo')
+      }
+      if (findGetParameter('t') !== null && findGetParameter('t') !== '') {
+        form
+          .find('.search-word-rm')
+          .parent('div')
+          .addClass('form__input--activo')
+      }
+
+      // load specilities if the filter is removed
+      if (findGetParameter('c') > 0 && findGetParameter('e') == null) {
+        var tid_city = form.find('.h-city-rm').val(),
+          tid_plan = form.find('.plan-types:checked').val()
+        specialty_select(tid_plan, tid_city)
+      }
+
+      // States fields gropus
+      $('.plan-types').change(function () {
+        if ($(this).hasClass('show-filter')) {
+          return true
+        } else {
+          var form = $(this).parents('.wrapper-form-search')
+          form.find('.city-rm').val('')
+          form.find('.speciality-rm-sr').val('')
+          form.find('.search-word-rm').val('')
+          form.find('.check-around-me').prop('checked', false)
+          btn_form_submit.attr('disabled', 'disabled')
+        }
+      })
+
+      function addAttrPositionFields(position) {
+        var wrapper = $('#search-medical-network-form'),
+          hideen_lat = wrapper.find('.h-lat'),
+          hideen_long = wrapper.find('.h-long'),
+          long,
+          lat
+
+        if (typeof Storage !== undefined) {
+          if (
+            localStorage.getItem('long') === null &&
+            position.coords.longitude &&
+            position.coords.latitude
+          ) {
+            localStorage.setItem('long', position.coords.longitude)
+            localStorage.setItem('lat', position.coords.latitude)
+          }
+          long = localStorage.getItem('long')
+          lat = localStorage.getItem('lat')
+
+          // Update location info
+          if (
+            lat !== position.coords.latitude ||
+            long !== position.coords.longitude
+          ) {
+            localStorage.setItem('long', position.coords.longitude)
+            localStorage.setItem('lat', position.coords.latitude)
+          }
+        } else {
+          long = position.coords.longitude
+          lat = position.coords.latitude
+        }
+
+        if ($.isNumeric(long) && $.isNumeric(lat)) {
+          hideen_lat.attr('data-lat', lat)
+          hideen_long.attr('data-long', long)
+        }
+      }
+
+      function assignPositionFields(wrapper) {
+        if (wrapper.find('.check-around-me').prop('checked')) {
+          wrapper.find('.h-lat').val(wrapper.find('.h-lat').attr('data-lat'))
+          wrapper.find('.h-long').val(wrapper.find('.h-long').attr('data-long'))
+        } else {
+          wrapper.find('.h-lat').val('')
+          wrapper.find('.h-long').val('')
+        }
+      }
+
+      // Add value hidden to select specialties
+      function add_value_hidden_of_select_specialties() {
+        var sl_specialty = form.find('.specialty-rm'),
+          h_sl_specialty = form.find('.h-specialty-rm'),
+          city_rm = form.find('.city-rm')
+
+        sl_specialty.on('change', function () {
+          if ($.isNumeric(sl_specialty.val())) {
+            h_sl_specialty.val(sl_specialty.val())
+            btn_form_submit.removeAttr('disabled')
+          }
+        })
+        city_rm.focusout(function () {
+          if ($.isNumeric(sl_specialty.val())) {
+            h_sl_specialty.val(sl_specialty.val())
+          }
+        })
+      }
+
+      // Add autocomplete title
+      function execute_word_autocomplete() {
+        form
+          .find('.search-word-rm')
+          .on('focus', function () {
+            $(this).val('')
+          })
+          .on('keyup', function () {
+            word_autocomplete()
+          })
+      }
+
+      // Dinamical select specialties
+      function specialty_select(tid_plan, tid_city, dflt_val) {
+        dflt_val = dflt_val || null
+        if (
+          tid_plan !== null &&
+          (tid_plan !== undefined) & (tid_city !== null) &&
+          tid_city !== undefined
+        ) {
+          var url_json =
+              '/specialty-select/' + tid_plan + '/' + tid_city + '/' + dflt_val,
+            sl_specialty = null
+          $.getJSON(url_json, function (data) {
+            sl_specialty = form
+              .find('.specialty-rm')
+              .empty()
+              .removeAttr('disabled')
+            $.each(data, function (i, val) {
+              sl_specialty.append(new Option(val.label, val.value))
+            })
+            if (dflt_val !== null) {
+              sl_specialty.val(dflt_val)
+            }
+          })
+        }
+      }
+
+      // Autocomplete cities
+      function cities_autocomplete() {
+        var city = form.find('.city-rm'),
+          val_city = city.val(),
+          tid_plan = form.find('.plan-types:checked').val(),
+          url_json = '/cities-autocomplete/'
+
+        if (tid_plan !== null && tid_plan !== undefined) {
+          args = { tid_plan: tid_plan }
+          customAutocomplete(city, url_json + tid_plan + '/' + val_city, args)
+        }
+      }
+
+      // Autocomplete cities
+      function speciality_autocomplete() {
+        var tid_city = form.find('.h-city-rm').val(),
+          tid_plan = form.find('.plan-types:checked').val()
+
+        var speciality = form.find('.speciality-rm-sr'),
+          val_speciality = speciality.val(),
+          url_json = '/specialty-select/'
+
+        if (
+          tid_plan !== null &&
+          tid_plan !== undefined &&
+          tid_city !== undefined
+        ) {
+          args = { tid_plan: tid_plan, tid_city: tid_city }
+          customAutocomplete(
+            speciality,
+            url_json + tid_plan + '/' + tid_city + '/' + val_speciality,
+            args,
+          )
+        }
+      }
+
+      // Search autocomplete
+      function word_autocomplete() {
+        var word = form.find('.search-word-rm'),
+          word_val = word.val(),
+          tid_plan = form.find('.plan-types:checked').val(),
+          tid_city = form.find('.h-city-rm').val(),
+          tid_specialty = form.find('.h-specialty-rm').val(),
+          url_json = ''
+
+        url_json = '/word-autocomplete/' + word_val + '/' + tid_plan
+        if (tid_city !== '') {
+          url_json += '/' + tid_city
+        }
+        if (tid_specialty !== '') {
+          url_json += '/' + tid_specialty
+        }
+        customAutocomplete(word, url_json)
+      }
+
+      // Single autocomplete to all functions
+      function customAutocomplete(element, url, args) {
+        element.autocomplete({
+          source: function (request, response) {
+            $.getJSON(url, function (data) {
+              response(
+                $.map(data, function (v, k) {
+                  return {
+                    label: v.label,
+                    id: v.value,
+                  }
+                }),
+              )
+            })
+          },
+          minLength: 2,
+          select: function (event, ui) {
+            if (element.hasClass('city-rm')) {
+              form.find('.speciality-rm-sr').removeAttr('disabled')
+              form.find('.h-city-rm').val(ui.item.id)
+            }
+            if (element.hasClass('speciality-rm-sr')) {
+              form.find('.h-specialty-rm').val(ui.item.id)
+              btn_form_submit.removeAttr('disabled')
+            }
+            if (element.hasClass('search-word-rm')) {
+              btn_form_submit.removeAttr('disabled')
+            }
+            this.value = ui.item.label
+            // return false;
+          },
+        })
+      }
+
+      // Remove param url
+      function removeParamUrl(removeKey, sourceURL) {
+        var rtn = sourceURL.split('?')[0],
+          param,
+          params_arr = [],
+          queryString =
+            sourceURL.indexOf('?') !== -1 ? sourceURL.split('?')[1] : ''
+        if (queryString !== '') {
+          params_arr = queryString.split('&')
+          for (var i = params_arr.length - 1; i >= 0; i -= 1) {
+            param = params_arr[i].split('=')[0]
+            if (param === removeKey) {
+              params_arr.splice(i, 1)
+            }
+          }
+          rtn = rtn + '?' + params_arr.join('&')
+        }
+        return rtn
+      }
+
+      // Find parameter get in url
+      function findGetParameter(parameterName) {
+        var result = null,
+          tmp = []
+        var items = location.search.substr(1).split('&')
+        for (var index = 0; index < items.length; index++) {
+          tmp = items[index].split('=')
+          if (tmp[0] === parameterName) result = decodeURIComponent(tmp[1])
+        }
+        return result
+      }
+    },
+  }
+})(jQuery, Drupal)
+;
